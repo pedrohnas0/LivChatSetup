@@ -1,4 +1,4 @@
-# Orion Server Setup
+# LivChat Server Setup
 
 Sistema modular de configuração de servidor Linux com Docker Swarm, Traefik e Portainer.
 

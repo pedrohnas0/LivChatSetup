@@ -18,6 +18,10 @@ from setup.docker_setup import DockerSetup
 from setup.traefik_setup import TraefikSetup
 from setup.portainer_setup import PortainerSetup
 from setup.cleanup_setup import CleanupSetup
+from setup.redis_setup import RedisSetup
+from setup.postgres_setup import PostgresSetup
+from setup.pgvector_setup import PgVectorSetup
+from setup.minio_setup import MinioSetup
 
 class ModuleCoordinator:
     """Coordenador simplificado dos módulos de setup"""
@@ -82,8 +86,7 @@ class ModuleCoordinator:
                 return True
             self.logger.info(f"Email configurado: {email}")
         
-        traefik_setup = TraefikSetup(email, self.args.network_name)
-        return self.execute_module("Traefik", traefik_setup)
+        return self.execute_module('traefik', email=email)
     
     def run_portainer_setup(self, domain: str) -> bool:
         """Executa instalação do Portainer"""
@@ -96,8 +99,23 @@ class ModuleCoordinator:
                 return True
             self.logger.info(f"Domínio Portainer configurado: {domain}")
         
-        portainer_setup = PortainerSetup(domain, self.args.network_name)
-        return self.execute_module("Portainer", portainer_setup)
+        return self.execute_module('portainer', portainer_domain=domain)
+    
+    def run_redis_setup(self) -> bool:
+        """Executa instalação do Redis"""
+        return self.execute_module('redis')
+    
+    def run_postgres_setup(self) -> bool:
+        """Executa instalação do PostgreSQL"""
+        return self.execute_module('postgres')
+    
+    def run_pgvector_setup(self) -> bool:
+        """Executa instalação do PostgreSQL + PgVector"""
+        return self.execute_module('pgvector')
+    
+    def run_minio_setup(self) -> bool:
+        """Executa instalação do MinIO (S3)"""
+        return self.execute_module('minio')
     
     def run_cleanup_setup(self) -> bool:
         """Executa limpeza completa"""
@@ -119,8 +137,7 @@ class ModuleCoordinator:
             print("\nOperação cancelada pelo usuário.")
             return True
         
-        cleanup_setup = CleanupSetup()
-        return self.execute_module("Limpeza", cleanup_setup)
+        return self.execute_module('cleanup')
     
     def get_module_map(self) -> dict:
         """Retorna mapeamento de módulos disponíveis"""
@@ -130,6 +147,10 @@ class ModuleCoordinator:
             'docker': ('Docker', lambda: self.run_docker_setup()),
             'traefik': ('Traefik', lambda: self.run_traefik_setup(self.args.email)),
             'portainer': ('Portainer', lambda: self.run_portainer_setup(self.args.portainer_domain)),
+            'redis': ('Redis', lambda: self.run_redis_setup()),
+            'postgres': ('PostgreSQL', lambda: self.run_postgres_setup()),
+            'pgvector': ('PostgreSQL + PgVector', lambda: self.run_pgvector_setup()),
+            'minio': ('MinIO (S3)', lambda: self.run_minio_setup()),
             'cleanup': ('Limpeza', lambda: self.run_cleanup_setup())
         }
     
@@ -150,7 +171,7 @@ class ModuleCoordinator:
                 return False
         else:
             # Executa módulos principais (exceto cleanup)
-            main_modules = ['basic', 'hostname', 'docker', 'traefik', 'portainer']
+            main_modules = ['basic', 'hostname', 'docker', 'traefik', 'portainer', 'redis', 'postgres', 'pgvector', 'minio']
             
             for module_key in main_modules:
                 if module_key in module_map:

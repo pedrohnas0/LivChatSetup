@@ -5,6 +5,7 @@ import logging
 import secrets
 import string
 from .base_setup import BaseSetup
+from utils.template_engine import TemplateEngine
 
 class PostgresSetup(BaseSetup):
     def __init__(self):
@@ -19,73 +20,30 @@ class PostgresSetup(BaseSetup):
         return password
 
     def create_postgres_stack(self):
-        """Cria o arquivo docker-compose para PostgreSQL"""
+        """Cria o arquivo docker-compose para PostgreSQL usando template Jinja2"""
         self.logger.info("Criando stack do PostgreSQL")
         
         # Gera senha aleatória
         self.postgres_password = self.generate_password()
         
-        stack_content = f"""version: "3.7"
-services:
-
-## --------------------------- ORION --------------------------- ##
-
-  postgres:
-    image: postgres:14
-    command: >
-      postgres
-      -c max_connections=500
-      -c shared_buffers=512MB
-
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-    networks:
-      - orion_network
-
-    ## Descomente as linhas abaixo para uso externo
-    #ports:
-    #  - 5432:5432
-
-    environment:
-      ## Senha do postgres 
-      - POSTGRES_PASSWORD={self.postgres_password}
-
-      ## Timezone
-      - TZ=America/Sao_Paulo
-
-    deploy:
-      mode: replicated
-      replicas: 1
-      placement:
-        constraints:
-          - node.role == manager
-      resources:
-        limits:
-          cpus: "1"
-          memory: 1024M
-
-## --------------------------- ORION --------------------------- ##
-
-volumes:
-  postgres_data:
-    external: true
-    name: postgres_data
-
-networks:
-  orion_network:
-    external: true
-    name: orion_network
-"""
+        # Usa o template engine para renderizar o template
+        template_engine = TemplateEngine()
+        template_vars = {
+            'postgres_password': self.postgres_password,
+            'network_name': 'orion_network'
+        }
         
-        stack_file = "/tmp/postgres.yaml"
-        try:
-            with open(stack_file, 'w') as f:
-                f.write(stack_content)
+        stack_file = template_engine.render_template(
+            'postgres.yaml.j2', 
+            template_vars, 
+            '/tmp/postgres.yaml'
+        )
+        
+        if stack_file:
             self.logger.info("Stack do PostgreSQL criada com sucesso")
             return stack_file
-        except Exception as e:
-            self.logger.error(f"Erro ao criar stack do PostgreSQL: {e}")
+        else:
+            self.logger.error("Erro ao criar stack do PostgreSQL")
             return None
 
     def create_volume(self):

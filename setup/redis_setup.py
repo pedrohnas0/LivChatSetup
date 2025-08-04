@@ -5,6 +5,7 @@ import logging
 import secrets
 import string
 from .base_setup import BaseSetup
+from utils.template_engine import TemplateEngine
 
 class RedisSetup(BaseSetup):
     def __init__(self):
@@ -19,68 +20,30 @@ class RedisSetup(BaseSetup):
         return password
 
     def create_redis_stack(self):
-        """Cria o arquivo docker-compose para Redis"""
+        """Cria o arquivo docker-compose para Redis usando template Jinja2"""
         self.logger.info("Criando stack do Redis")
         
         # Gera senha aleatória
         self.redis_password = self.generate_password()
         
-        stack_content = f"""version: "3.7"
-services:
-
-## --------------------------- ORION --------------------------- ##
-
-  redis:
-    image: redis:latest
-    command: [
-        "redis-server",
-        "--requirepass", "{self.redis_password}",
-        "--port", "6379"
-      ]
-
-    volumes:
-      - redis_data:/data
-
-    networks:
-      - orion_network
-
-    ## Descomente as linhas abaixo para uso externo
-    #ports:
-    #  - 6379:6379
-
-    environment:
-      - TZ=America/Sao_Paulo
-
-    deploy:
-      placement:
-        constraints:
-          - node.role == manager
-      resources:
-        limits:
-          cpus: "1"
-          memory: 2048M
-
-## --------------------------- ORION --------------------------- ##
-
-volumes:
-  redis_data:
-    external: true
-    name: redis_data
-
-networks:
-  orion_network:
-    external: true
-    name: orion_network
-"""
+        # Usa o template engine para renderizar o template
+        template_engine = TemplateEngine()
+        template_vars = {
+            'redis_password': self.redis_password,
+            'network_name': 'orion_network'
+        }
         
-        stack_file = "/tmp/redis.yaml"
-        try:
-            with open(stack_file, 'w') as f:
-                f.write(stack_content)
+        stack_file = template_engine.render_template(
+            'redis.yaml.j2', 
+            template_vars, 
+            '/tmp/redis.yaml'
+        )
+        
+        if stack_file:
             self.logger.info("Stack do Redis criada com sucesso")
             return stack_file
-        except Exception as e:
-            self.logger.error(f"Erro ao criar stack do Redis: {e}")
+        else:
+            self.logger.error("Erro ao criar stack do Redis")
             return None
 
     def create_volume(self):

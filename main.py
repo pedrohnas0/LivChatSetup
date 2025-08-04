@@ -24,6 +24,7 @@ install_dependencies()
 
 # Importa coordenador de módulos
 from utils.module_coordinator import ModuleCoordinator
+from utils.interactive_menu import InteractiveMenu
 
 class MainSetup:
     """Coordenador principal simplificado"""
@@ -43,19 +44,40 @@ class MainSetup:
         # Valida hostname apenas se não for cleanup e não for interativo
         if (not self.args.hostname and 
             self.args.module != 'cleanup' and 
-            not self.args.interactive):
+            not self.args.interactive and
+            not self.args.menu):
             print("Nome do servidor não fornecido. Use --hostname ou --interactive")
             return False
             
         return True
     
+    def run_setup(self):
+        """Executa o setup com base nos argumentos fornecidos"""
+        # Se menu interativo foi solicitado
+        if self.args.menu:
+            menu = InteractiveMenu(self.args)
+            return menu.run()
+        
+        self.logger.info("Iniciando setup do sistema")
+        
+        # Delega execução para o coordenador
+        coordinator = ModuleCoordinator(self.args)
+        success = coordinator.run_modules()
+        
+        if success:
+            self.logger.info("Setup concluído com sucesso")
+        else:
+            self.logger.error("Setup falhou")
+            
+        return success
+
     def run(self) -> bool:
         """Executa o setup principal"""
         if not self.validate_prerequisites():
             return False
         
         # Delega toda a execução para o coordenador
-        success = self.coordinator.run_modules()
+        success = self.run_setup()
         self.coordinator.show_summary(success)
         
         return success
@@ -85,16 +107,9 @@ Exemplos de uso:
         help="Email para certificados SSL do Traefik"
     )
     
-    parser.add_argument(
-        "--portainer-domain",
-        help="Domínio do Portainer (ex: portainer.seudominio.com)"
-    )
-    
-    parser.add_argument(
-        "--network-name",
-        default="orion_network",
-        help="Nome da rede Docker (padrão: orion_network)"
-    )
+    parser.add_argument('--portainer-domain', type=str, help='Domínio para o Portainer')
+    parser.add_argument('--network-name', type=str, default='orion_network', help='Nome da rede Docker')
+    parser.add_argument('--menu', action='store_true', help='Executa o menu interativo')
     
     parser.add_argument(
         "--interactive", "-i",

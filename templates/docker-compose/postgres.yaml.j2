@@ -1,0 +1,51 @@
+version: "3.7"
+services:
+
+## --------------------------- LIVCHAT --------------------------- ##
+
+  postgres:
+    image: postgres:14
+    command: >
+      postgres
+      -c max_connections=500
+      -c shared_buffers=512MB
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    networks:
+      - {{ network_name }}
+
+    ## Descomente as linhas abaixo para uso externo
+    #ports:
+    #  - 5432:5432
+
+    environment:
+      ## Senha do postgres 
+      - POSTGRES_PASSWORD={{ postgres_password }}
+
+      ## Timezone
+      - TZ=America/Sao_Paulo
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1024M
+
+## --------------------------- LIVCHAT --------------------------- ##
+
+volumes:
+  postgres_data:
+    external: true
+    name: postgres_data
+
+networks:
+  {{ network_name }}:
+    external: true
+    name: {{ network_name }}

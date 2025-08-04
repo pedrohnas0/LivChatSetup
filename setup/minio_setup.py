@@ -5,6 +5,7 @@ import logging
 import secrets
 import string
 from .base_setup import BaseSetup
+from utils.template_engine import TemplateEngine
 
 class MinioSetup(BaseSetup):
     def __init__(self):
@@ -57,78 +58,30 @@ class MinioSetup(BaseSetup):
         return confirm in ['s', 'sim', 'y', 'yes']
 
     def create_minio_stack(self):
-        """Cria o arquivo docker-compose para MinIO"""
+        """Cria o arquivo docker-compose para MinIO usando template Jinja2"""
         self.logger.info("Criando stack do MinIO")
         
-        stack_content = f"""version: "3.7"
-services:
-
-## --------------------------- ORION --------------------------- ##
-
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
-
-    volumes:
-      - minio_data:/data
-
-    networks:
-      - orion_network
-
-    environment:
-      - MINIO_ROOT_USER={self.minio_user}
-      - MINIO_ROOT_PASSWORD={self.minio_password}
-      - TZ=America/Sao_Paulo
-
-    deploy:
-      mode: replicated
-      replicas: 1
-      placement:
-        constraints:
-          - node.role == manager
-      resources:
-        limits:
-          cpus: "1"
-          memory: 1024M
-      labels:
-        - traefik.enable=true
-        - traefik.swarm.network=orion_network
+        # Usa o template engine para renderizar o template
+        template_engine = TemplateEngine()
+        template_vars = {
+            'minio_user': self.minio_user,
+            'minio_password': self.minio_password,
+            'minio_domain': self.minio_domain,
+            's3_domain': self.s3_domain,
+            'network_name': 'orion_network'
+        }
         
-        # Console MinIO (porta 9001)
-        - traefik.http.services.minio-console.loadbalancer.server.port=9001
-        - traefik.http.routers.minio-console.rule=Host(`{self.minio_domain}`)
-        - traefik.http.routers.minio-console.service=minio-console
-        - traefik.http.routers.minio-console.entrypoints=websecure
-        - traefik.http.routers.minio-console.tls.certresolver=letsencryptresolver
+        stack_file = template_engine.render_template(
+            'minio.yaml.j2', 
+            template_vars, 
+            '/tmp/minio.yaml'
+        )
         
-        # API S3 (porta 9000)
-        - traefik.http.services.minio-s3.loadbalancer.server.port=9000
-        - traefik.http.routers.minio-s3.rule=Host(`{self.s3_domain}`)
-        - traefik.http.routers.minio-s3.service=minio-s3
-        - traefik.http.routers.minio-s3.entrypoints=websecure
-        - traefik.http.routers.minio-s3.tls.certresolver=letsencryptresolver
-
-## --------------------------- ORION --------------------------- ##
-
-volumes:
-  minio_data:
-    external: true
-    name: minio_data
-
-networks:
-  orion_network:
-    external: true
-    name: orion_network
-"""
-        
-        stack_file = "/tmp/minio.yaml"
-        try:
-            with open(stack_file, 'w') as f:
-                f.write(stack_content)
+        if stack_file:
             self.logger.info("Stack do MinIO criada com sucesso")
             return stack_file
-        except Exception as e:
-            self.logger.error(f"Erro ao criar stack do MinIO: {e}")
+        else:
+            self.logger.error("Erro ao criar stack do MinIO")
             return None
 
     def create_volume(self):

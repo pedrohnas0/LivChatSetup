@@ -6,6 +6,14 @@ from utils.module_coordinator import ModuleCoordinator
 class InteractiveMenu:
     """Menu interativo para seleção de aplicações"""
     
+    # Cores do Setup (seguindo padrão do script original)
+    AMARELO = "\033[33m"
+    VERDE = "\033[32m"
+    BRANCO = "\033[97m"
+    BEGE = "\033[93m"
+    VERMELHO = "\033[91m"
+    RESET = "\033[0m"
+    
     def __init__(self, args):
         self.args = args
         self.logger = logging.getLogger(__name__)
@@ -13,40 +21,40 @@ class InteractiveMenu:
         
     def show_menu(self):
         """Exibe o menu principal sem limpar o terminal"""
-        print("\n" + "="*60)
-        print("           SETUP LIVCHAT - MENU DE APLICAÇÕES")
-        print("="*60)
+        print(f"\n{self.BRANCO}## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##{self.RESET}")
+        print(f"{self.BRANCO}##                           {self.VERDE}SETUP LIVCHAT - MENU PRINCIPAL{self.BRANCO}                           ##{self.RESET}")
+        print(f"{self.BRANCO}## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##{self.RESET}")
         print()
-        print("Escolha a aplicação que deseja instalar:")
+        print(f"{self.BEGE}Escolha a aplicação que deseja instalar:{self.RESET}")
         print()
-        print("  [1] Configuração Básica do Sistema")
-        print("  [2] Configuração de Hostname")
-        print("  [3] Instalação do Docker + Swarm")
-        print("  [4] Instalação do Traefik (Proxy Reverso)")
-        print("  [5] Instalação do Portainer (Gerenciador Docker)")
+        print(f"{self.AMARELO}  [1]{self.BRANCO} Configuração Básica do Sistema{self.RESET}")
+        print(f"{self.AMARELO}  [2]{self.BRANCO} Configuração de Hostname{self.RESET}")
+        print(f"{self.AMARELO}  [3]{self.BRANCO} Instalação do Docker + Swarm{self.RESET}")
+        print(f"{self.AMARELO}  [4]{self.BRANCO} Instalação do Traefik (Proxy Reverso){self.RESET}")
+        print(f"{self.AMARELO}  [5]{self.BRANCO} Instalação do Portainer (Gerenciador Docker){self.RESET}")
         print()
-        print("  BANCOS DE DADOS:")
-        print("  [6] Redis (Cache/Session Store)")
-        print("  [7] PostgreSQL (Banco Relacional)")
-        print("  [8] PostgreSQL + PgVector (Banco Vetorial)")
+        print(f"{self.VERDE}  BANCOS DE DADOS:{self.RESET}")
+        print(f"{self.AMARELO}  [6]{self.BRANCO} Redis (Cache/Session Store){self.RESET}")
+        print(f"{self.AMARELO}  [7]{self.BRANCO} PostgreSQL (Banco Relacional){self.RESET}")
+        print(f"{self.AMARELO}  [8]{self.BRANCO} PostgreSQL + PgVector (Banco Vetorial){self.RESET}")
         print()
-        print("  ARMAZENAMENTO:")
-        print("  [9] MinIO (S3 Compatible Storage)")
+        print(f"{self.VERDE}  ARMAZENAMENTO:{self.RESET}")
+        print(f"{self.AMARELO}  [9]{self.BRANCO} MinIO (S3 Compatible Storage){self.RESET}")
         print()
-        print("  UTILITÁRIOS:")
-        print("  [10] Instalar Tudo (Básico + Docker + Traefik + Portainer)")
-        print("  [11] Limpeza Completa do Ambiente")
-        print("  [0] Sair")
+        print(f"{self.VERDE}  UTILITÁRIOS:{self.RESET}")
+        print(f"{self.AMARELO} [10]{self.BRANCO} Instalar Tudo (Básico + Docker + Traefik + Portainer){self.RESET}")
+        print(f"{self.AMARELO} [11]{self.VERMELHO} Limpeza Completa do Ambiente{self.RESET}")
+        print(f"{self.AMARELO}  [0]{self.BEGE} Sair{self.RESET}")
         print()
-        print("="*60)
+        print(f"{self.BRANCO}## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##{self.RESET}")
         
     def get_user_choice(self):
         """Obtém a escolha do usuário"""
         try:
-            choice = input("Digite sua opção [0-11]: ").strip()
+            choice = input(f"{self.AMARELO}Digite sua opção [0-11]: {self.RESET}").strip()
             return choice
         except KeyboardInterrupt:
-            print("\nOperação cancelada pelo usuário.")
+            print(f"\n{self.VERMELHO}Operação cancelada pelo usuário.{self.RESET}")
             return "0"
     
     def execute_choice(self, choice):
@@ -54,62 +62,62 @@ class InteractiveMenu:
         success = False
         
         if choice == "1":
-            print("\n🔧 Executando configuração básica do sistema...")
+            print(f"\n{self.VERDE}Executando configuração básica do sistema...{self.RESET}")
             success = self.coordinator.execute_module('basic')
             
         elif choice == "2":
-            print("\n🏷️  Executando configuração de hostname...")
+            print(f"\n{self.VERDE}Executando configuração de hostname...{self.RESET}")
             success = self.coordinator.execute_module('hostname')
             
         elif choice == "3":
-            print("\n🐳 Executando instalação do Docker...")
+            print(f"\n{self.VERDE}Executando instalação do Docker...{self.RESET}")
             success = self.coordinator.execute_module('docker')
             
         elif choice == "4":
-            print("\n🌐 Executando instalação do Traefik...")
-            email = self.args.email or input("Digite seu email para certificados SSL: ")
+            print(f"\n{self.VERDE}Executando instalação do Traefik...{self.RESET}")
+            email = self.args.email or input(f"{self.AMARELO}Digite seu email para certificados SSL: {self.RESET}")
             success = self.coordinator.execute_module('traefik', email=email)
             
         elif choice == "5":
-            print("\n📊 Executando instalação do Portainer...")
-            domain = self.args.portainer_domain or input("Digite o domínio para o Portainer: ")
+            print(f"\n{self.VERDE}Executando instalação do Portainer...{self.RESET}")
+            domain = self.args.portainer_domain or input(f"{self.AMARELO}Digite o domínio para o Portainer: {self.RESET}")
             success = self.coordinator.execute_module('portainer', portainer_domain=domain)
             
         elif choice == "6":
-            print("\n🔴 Executando instalação do Redis...")
+            print(f"\n{self.VERDE}Executando instalação do Redis...{self.RESET}")
             success = self.coordinator.execute_module('redis')
             
         elif choice == "7":
-            print("\n🐘 Executando instalação do PostgreSQL...")
+            print(f"\n{self.VERDE}Executando instalação do PostgreSQL...{self.RESET}")
             success = self.coordinator.execute_module('postgres')
             
         elif choice == "8":
-            print("\n🔍 Executando instalação do PostgreSQL + PgVector...")
+            print(f"\n{self.VERDE}Executando instalação do PostgreSQL + PgVector...{self.RESET}")
             success = self.coordinator.execute_module('pgvector')
             
         elif choice == "9":
-            print("\n📦 Executando instalação do MinIO...")
+            print(f"\n{self.VERDE}Executando instalação do MinIO...{self.RESET}")
             success = self.coordinator.execute_module('minio')
             
         elif choice == "10":
-            print("\n🚀 Executando instalação completa...")
+            print(f"\n{self.VERDE}Executando instalação completa...{self.RESET}")
             success = self.install_full_stack()
             
         elif choice == "11":
-            print("\n🧹 Executando limpeza completa...")
-            confirm = input("ATENÇÃO: Isso irá remover TODOS os containers, volumes e redes do Docker Swarm. Confirma? (digite 'CONFIRMO'): ")
+            print(f"\n{self.VERMELHO}Executando limpeza completa...{self.RESET}")
+            confirm = input(f"{self.VERMELHO}ATENÇÃO: Isso irá remover TODOS os containers, volumes e redes do Docker Swarm. Confirma? (digite 'CONFIRMO'): {self.RESET}")
             if confirm == 'CONFIRMO':
                 success = self.coordinator.execute_module('cleanup')
             else:
-                print("Limpeza cancelada pelo usuário.")
+                print(f"{self.AMARELO}Limpeza cancelada pelo usuário.{self.RESET}")
                 success = True
                 
         elif choice == "0":
-            print("\nSaindo do menu...")
+            print(f"\n{self.BEGE}Saindo do menu...{self.RESET}")
             return False, True
             
         else:
-            print(f"\nOpção '{choice}' inválida. Tente novamente.")
+            print(f"\n{self.VERMELHO}Opção '{choice}' inválida. Tente novamente.{self.RESET}")
             return False, False
         
         return success, False
@@ -140,16 +148,16 @@ class InteractiveMenu:
     def show_result(self, success, module_name=""):
         """Exibe o resultado da operação"""
         if success:
-            print(f"\n✅ {module_name} instalado com sucesso!")
+            print(f"\n{self.VERDE}[ OK ] {module_name} instalado com sucesso!{self.RESET}")
         else:
-            print(f"\n❌ Falha na instalação do {module_name}")
+            print(f"\n{self.VERMELHO}[ ERRO ] Falha na instalação do {module_name}{self.RESET}")
         
-        print("\nPressione Enter para continuar...")
+        print(f"\n{self.BEGE}Pressione Enter para continuar...{self.RESET}")
         input()
     
     def run(self):
         """Executa o menu interativo"""
-        print("\n🚀 Bem-vindo ao Setup LivChat!")
+        print(f"\n{self.VERDE}Bem-vindo ao Setup LivChat!{self.RESET}")
         
         while True:
             self.show_menu()
@@ -163,5 +171,5 @@ class InteractiveMenu:
             if choice != "0":
                 self.show_result(success)
         
-        print("\n👋 Obrigado por usar o Setup LivChat!")
+        print(f"\n{self.VERDE}Obrigado por usar o Setup LivChat!{self.RESET}")
         return True
