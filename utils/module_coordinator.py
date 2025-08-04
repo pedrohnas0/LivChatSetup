@@ -43,8 +43,8 @@ class ModuleCoordinator:
             print("\nOperação cancelada pelo usuário.")
             return None
     
-    def execute_module(self, module_name: str, module_instance) -> bool:
-        """Executa um módulo específico"""
+    def execute_module_instance(self, module_name: str, module_instance) -> bool:
+        """Executa uma instância de módulo específico"""
         self.logger.info(f"Iniciando módulo: {module_name}")
         
         try:
@@ -58,6 +58,68 @@ class ModuleCoordinator:
             self.logger.error(f"Exceção no módulo {module_name}: {e}")
             return False
     
+    def execute_module(self, module_name, **kwargs):
+        """Executa um módulo específico por nome"""
+        try:
+            if module_name == 'basic':
+                basic_setup = BasicSetup()
+                return basic_setup.run_basic_setup()
+            
+            elif module_name == 'hostname':
+                hostname_setup = HostnameSetup(self.args.hostname)
+                return hostname_setup.run()
+            
+            elif module_name == 'docker':
+                docker_setup = DockerSetup()
+                return docker_setup.run_docker_setup()
+            
+            elif module_name == 'traefik':
+                email = kwargs.get('email')
+                if not email:
+                    email = input("Digite seu email para certificados SSL: ")
+                traefik_setup = TraefikSetup()
+                return traefik_setup.run_traefik_setup(email)
+            
+            elif module_name == 'portainer':
+                domain = kwargs.get('portainer_domain')
+                if not domain:
+                    domain = input("Digite o domínio para o Portainer: ")
+                portainer_setup = PortainerSetup()
+                return portainer_setup.run_portainer_setup(domain)
+            
+            elif module_name == 'redis':
+                redis_setup = RedisSetup()
+                return redis_setup.run_redis_setup()
+            
+            elif module_name == 'postgres':
+                postgres_setup = PostgresSetup()
+                return postgres_setup.run_postgres_setup()
+            
+            elif module_name == 'pgvector':
+                pgvector_setup = PgVectorSetup()
+                return pgvector_setup.run_pgvector_setup()
+            
+            elif module_name == 'minio':
+                minio_setup = MinioSetup()
+                return minio_setup.run_minio_setup()
+            
+            elif module_name == 'cleanup':
+                # Solicita confirmação para limpeza
+                confirm = input("ATENÇÃO: Isso irá remover TODOS os containers, volumes e redes do Docker Swarm. Confirma? (digite 'CONFIRMO'): ")
+                if confirm != 'CONFIRMO':
+                    self.logger.info("Limpeza cancelada pelo usuário")
+                    return False
+                cleanup_setup = CleanupSetup()
+                return cleanup_setup.run_cleanup_setup()
+            
+            else:
+                self.logger.error(f"Módulo '{module_name}' não encontrado")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Erro ao executar módulo {module_name}: {e}")
+            return False
+    
     def run_basic_setup(self) -> bool:
         """Executa setup básico"""
         basic_setup = BasicSetup()
@@ -68,12 +130,12 @@ class ModuleCoordinator:
         if not hostname:
             return True  # Skip se não fornecido
         hostname_setup = HostnameSetup(hostname)
-        return self.execute_module("Hostname", hostname_setup)
+        return self.execute_module_instance("Hostname", hostname_setup)
     
     def run_docker_setup(self) -> bool:
         """Executa instalação do Docker"""
         docker_setup = DockerSetup(not self.args.no_swarm)
-        return self.execute_module("Docker", docker_setup)
+        return self.execute_module_instance("Docker", docker_setup)
     
     def run_traefik_setup(self, email: str) -> bool:
         """Executa instalação do Traefik"""
@@ -86,7 +148,8 @@ class ModuleCoordinator:
                 return True
             self.logger.info(f"Email configurado: {email}")
         
-        return self.execute_module('traefik', email=email)
+        traefik_setup = TraefikSetup()
+        return traefik_setup.run_traefik_setup(email)
     
     def run_portainer_setup(self, domain: str) -> bool:
         """Executa instalação do Portainer"""
@@ -99,23 +162,28 @@ class ModuleCoordinator:
                 return True
             self.logger.info(f"Domínio Portainer configurado: {domain}")
         
-        return self.execute_module('portainer', portainer_domain=domain)
+        portainer_setup = PortainerSetup()
+        return portainer_setup.run_portainer_setup(domain)
     
     def run_redis_setup(self) -> bool:
         """Executa instalação do Redis"""
-        return self.execute_module('redis')
+        redis_setup = RedisSetup()
+        return redis_setup.run_redis_setup()
     
     def run_postgres_setup(self) -> bool:
         """Executa instalação do PostgreSQL"""
-        return self.execute_module('postgres')
+        postgres_setup = PostgresSetup()
+        return postgres_setup.run_postgres_setup()
     
     def run_pgvector_setup(self) -> bool:
         """Executa instalação do PostgreSQL + PgVector"""
-        return self.execute_module('pgvector')
+        pgvector_setup = PgVectorSetup()
+        return pgvector_setup.run_pgvector_setup()
     
     def run_minio_setup(self) -> bool:
         """Executa instalação do MinIO (S3)"""
-        return self.execute_module('minio')
+        minio_setup = MinioSetup()
+        return minio_setup.run_minio_setup()
     
     def run_cleanup_setup(self) -> bool:
         """Executa limpeza completa"""
@@ -137,7 +205,8 @@ class ModuleCoordinator:
             print("\nOperação cancelada pelo usuário.")
             return True
         
-        return self.execute_module('cleanup')
+        cleanup_setup = CleanupSetup()
+        return cleanup_setup.run_cleanup_setup()
     
     def get_module_map(self) -> dict:
         """Retorna mapeamento de módulos disponíveis"""

@@ -22,7 +22,7 @@ class InteractiveMenu:
     def show_menu(self):
         """Exibe o menu principal sem limpar o terminal"""
         print(f"\n{self.BRANCO}## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##{self.RESET}")
-        print(f"{self.BRANCO}##                           {self.VERDE}SETUP LIVCHAT - MENU PRINCIPAL{self.BRANCO}                           ##{self.RESET}")
+        print(f"{self.BRANCO}##                           {self.VERDE}SETUP LIVCHAT - MENU PRINCIPAL{self.BRANCO}                                  ##{self.RESET}")
         print(f"{self.BRANCO}## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##{self.RESET}")
         print()
         print(f"{self.BEGE}Escolha a aplicação que deseja instalar:{self.RESET}")
