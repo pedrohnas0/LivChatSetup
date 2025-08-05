@@ -25,12 +25,14 @@ install_dependencies()
 # Importa coordenador de módulos
 from utils.module_coordinator import ModuleCoordinator
 from utils.interactive_menu import InteractiveMenu
+from config import setup_logging
 
 class MainSetup:
     """Coordenador principal simplificado"""
     
     def __init__(self, args):
         self.args = args
+        self.logger = setup_logging()
         self.coordinator = ModuleCoordinator(args)
         
     def validate_prerequisites(self) -> bool:
@@ -39,6 +41,17 @@ class MainSetup:
         if os.geteuid() != 0:
             print("Este script deve ser executado como root")
             print("Execute: sudo python3 main.py")
+            return False
+        
+        # Módulos de banco de dados só podem ser executados pelo menu
+        database_modules = ['redis', 'postgres', 'pgvector', 'minio']
+        if (hasattr(self.args, 'module') and 
+            self.args.module in database_modules and 
+            not self.args.menu):
+            print(f"\n[ERRO] O módulo '{self.args.module}' só pode ser executado pelo menu interativo.")
+            print("Use: python3 main.py --menu")
+            print("\nMotivo: Os módulos de banco de dados requerem integração com o Portainer")
+            print("e devem seguir o fluxo completo de configuração via menu.\n")
             return False
         
         # Valida hostname apenas se não for cleanup e não for interativo
@@ -119,7 +132,7 @@ Exemplos de uso:
     
     parser.add_argument(
         "--module", "-m",
-        choices=["basic", "hostname", "docker", "traefik", "portainer", "network", "cleanup"],
+        choices=["basic", "hostname", "docker", "traefik", "portainer", "redis", "postgres", "pgvector", "minio", "cleanup"],
         help="Executa apenas um módulo específico"
     )
     

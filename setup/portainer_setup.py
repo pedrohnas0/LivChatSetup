@@ -15,7 +15,7 @@ from utils.template_engine import TemplateEngine
 class PortainerSetup(BaseSetup):
     """Instalação e configuração do Portainer"""
     
-    def __init__(self, domain: str, network_name: str = "orion_network"):
+    def __init__(self, domain: str = None, network_name: str = "orion_network"):
         super().__init__("Instalação do Portainer")
         self.domain = domain
         self.network_name = network_name
@@ -25,9 +25,12 @@ class PortainerSetup(BaseSetup):
         if not self.check_root():
             return False
             
+        # Solicita domínio interativamente se não fornecido
         if not self.domain:
-            self.logger.error("Domínio do Portainer não fornecido")
-            return False
+            self.domain = self._get_domain_input()
+            if not self.domain:
+                self.logger.error("Domínio do Portainer é obrigatório")
+                return False
             
         # Verifica se Docker está instalado
         if not self.is_docker_running():
@@ -40,6 +43,16 @@ class PortainerSetup(BaseSetup):
             return False
             
         return True
+    
+    def _get_domain_input(self) -> str:
+        """Solicita domínio do usuário interativamente"""
+        print("\n=== Configuração do Portainer ===")
+        while True:
+            domain = input("Digite o domínio para o Portainer (ex: ptn.seudominio.com): ").strip()
+            if domain and '.' in domain:
+                return domain
+            else:
+                print("Domínio inválido! Digite um domínio válido.")
     
     def is_docker_running(self) -> bool:
         """Verifica se Docker está rodando"""

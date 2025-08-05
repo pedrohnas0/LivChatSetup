@@ -1,0 +1,226 @@
+version: "3.7"
+services:
+
+## --------------------------- LIVCHAT --------------------------- ##
+
+  chatwoot_app:
+    image: chatwoot/chatwoot:v4.1.0
+    command: >
+      sh -c "echo 'Rails.application.config.active_storage.variant_processor = :mini_magick' > /app/config/initializers/active_storage.rb && bundle exec rails s -p 3000 -b 0.0.0.0"
+    entrypoint: docker/entrypoints/rails.sh
+
+    volumes:
+      - chatwoot_storage:/app/storage
+      - chatwoot_public:/app/public
+      - chatwoot_mailer:/app/app/views/devise/mailer
+      - chatwoot_mailers:/app/app/views/mailers
+
+    networks:
+      - {{ network_name }}
+    
+    environment:
+      ## 🏢 Nome da Empresa
+      - INSTALLATION_NAME={{ company_name }}
+
+      ## 🔐 Secret key
+      - SECRET_KEY_BASE={{ encryption_key }}
+
+      ## 💬 Url Chatwoot
+      - FRONTEND_URL=https://{{ domain }}
+      - FORCE_SSL=true
+
+      ## 🌍 Idioma/Localização padrão
+      - DEFAULT_LOCALE=pt_BR
+      - TZ=America/Sao_Paulo
+
+      ## 🧑‍💻 Dados do Redis
+      - REDIS_URL=redis://chatwoot_redis:6379
+
+      ## 🗄️ Dados do Postgres
+      - POSTGRES_HOST=pgvector
+      - POSTGRES_USERNAME=postgres
+      - POSTGRES_PASSWORD={{ pgvector_password }}
+      - POSTGRES_DATABASE=chatwoot
+
+      ## 🏠 Armazenamento
+      - ACTIVE_STORAGE_SERVICE=local
+
+      ## 📧 Dados do SMTP
+      - MAILER_SENDER_EMAIL={{ smtp_email }} <{{ smtp_email }}>
+      - SMTP_DOMAIN={{ smtp_domain }}
+      - SMTP_ADDRESS={{ smtp_host }}
+      - SMTP_PORT={{ smtp_port }}
+      - SMTP_SSL={{ smtp_ssl }}
+      - SMTP_USERNAME={{ smtp_user }}
+      - SMTP_PASSWORD={{ smtp_password }}
+      - SMTP_AUTHENTICATION=login
+      - SMTP_ENABLE_STARTTLS_AUTO=true
+      - SMTP_OPENSSL_VERIFY_MODE=peer
+      - MAILER_INBOUND_EMAIL_DOMAIN={{ smtp_email }}
+
+      ## ⚙️ Melhorias
+      - SIDEKIQ_CONCURRENCY=10
+      - RACK_TIMEOUT_SERVICE_TIMEOUT=0
+      - RAILS_MAX_THREADS=5
+      - WEB_CONCURRENCY=2
+      - ENABLE_RACK_ATTACK=false
+
+      ## ⚡ Outras configurações
+      - NODE_ENV=production
+      - RAILS_ENV=production
+      - INSTALLATION_ENV=docker
+      - RAILS_LOG_TO_STDOUT=true
+      - USE_INBOX_AVATAR_FOR_BOT=true
+      - ENABLE_ACCOUNT_SIGNUP=false
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1024M
+      labels:
+        - traefik.enable=true
+        - traefik.http.routers.chatwoot_app.rule=Host(`{{ domain }}`)
+        - traefik.http.routers.chatwoot_app.entrypoints=websecure
+        - traefik.http.routers.chatwoot_app.tls.certresolver=letsencryptresolver
+        - traefik.http.routers.chatwoot_app.priority=1
+        - traefik.http.routers.chatwoot_app.service=chatwoot_app
+        - traefik.http.services.chatwoot_app.loadbalancer.server.port=3000
+        - traefik.http.services.chatwoot_app.loadbalancer.passHostHeader=true
+        - traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto=https
+        - traefik.http.routers.chatwoot_app.middlewares=sslheader
+
+## --------------------------- LIVCHAT --------------------------- ##
+
+  chatwoot_sidekiq:
+    image: chatwoot/chatwoot:v4.1.0
+    command: bundle exec sidekiq -C config/sidekiq.yml
+
+    volumes:
+      - chatwoot_storage:/app/storage
+      - chatwoot_public:/app/public
+      - chatwoot_mailer:/app/app/views/devise/mailer
+      - chatwoot_mailers:/app/app/views/mailers
+
+    networks:
+      - {{ network_name }}
+
+    environment:
+      ## 🏢 Nome da Empresa
+      - INSTALLATION_NAME={{ company_name }}
+
+      ## 🔐 Secret key
+      - SECRET_KEY_BASE={{ encryption_key }}
+
+      ## 💬 Url Chatwoot
+      - FRONTEND_URL=https://{{ domain }}
+      - FORCE_SSL=true
+
+      ## 🌍 Idioma/Localização padrão
+      - DEFAULT_LOCALE=pt_BR
+      - TZ=America/Sao_Paulo
+
+      ## 🧑‍💻 Dados do Redis
+      - REDIS_URL=redis://chatwoot_redis:6379
+
+      ## 🗄️ Dados do Postgres
+      - POSTGRES_HOST=pgvector
+      - POSTGRES_USERNAME=postgres
+      - POSTGRES_PASSWORD={{ pgvector_password }}
+      - POSTGRES_DATABASE=chatwoot
+
+      ## 🏠 Armazenamento
+      - ACTIVE_STORAGE_SERVICE=local
+
+      ## 📧 Dados do SMTP
+      - MAILER_SENDER_EMAIL={{ smtp_email }} <{{ smtp_email }}>
+      - SMTP_DOMAIN={{ smtp_domain }}
+      - SMTP_ADDRESS={{ smtp_host }}
+      - SMTP_PORT={{ smtp_port }}
+      - SMTP_SSL={{ smtp_ssl }}
+      - SMTP_USERNAME={{ smtp_user }}
+      - SMTP_PASSWORD={{ smtp_password }}
+      - SMTP_AUTHENTICATION=login
+      - SMTP_ENABLE_STARTTLS_AUTO=true
+      - SMTP_OPENSSL_VERIFY_MODE=peer
+      - MAILER_INBOUND_EMAIL_DOMAIN={{ smtp_email }}
+
+      ## ⚙️ Melhorias
+      - SIDEKIQ_CONCURRENCY=10
+      - RACK_TIMEOUT_SERVICE_TIMEOUT=0
+      - RAILS_MAX_THREADS=5
+      - WEB_CONCURRENCY=2
+      - ENABLE_RACK_ATTACK=false
+
+      ## ⚡ Outras configurações
+      - NODE_ENV=production
+      - RAILS_ENV=production
+      - INSTALLATION_ENV=docker
+      - RAILS_LOG_TO_STDOUT=true
+      - USE_INBOX_AVATAR_FOR_BOT=true
+      - ENABLE_ACCOUNT_SIGNUP=false
+
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1024M
+
+## --------------------------- LIVCHAT --------------------------- ##
+
+  chatwoot_redis:
+    image: redis:latest
+    command: [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--port",
+        "6379"
+      ]
+
+    volumes:
+      - chatwoot_redis:/data
+
+    networks:
+      - {{ network_name }}
+
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "1"
+          memory: 2048M
+
+## --------------------------- LIVCHAT --------------------------- ##
+
+volumes:
+  chatwoot_storage:
+    external: true
+    name: chatwoot_storage
+  chatwoot_public:
+    external: true
+    name: chatwoot_public
+  chatwoot_mailer:
+    external: true
+    name: chatwoot_mailer
+  chatwoot_mailers:
+    external: true
+    name: chatwoot_mailers
+  chatwoot_redis:
+    external: true
+    name: chatwoot_redis
+
+networks:
+  {{ network_name }}:
+    external: true
+    name: {{ network_name }}

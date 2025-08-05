@@ -15,7 +15,7 @@ from utils.template_engine import TemplateEngine
 class TraefikSetup(BaseSetup):
     """Instalação e configuração do Traefik"""
     
-    def __init__(self, email: str, network_name: str = "orion_network"):
+    def __init__(self, email: str = None, network_name: str = "orion_network"):
         super().__init__("Instalação do Traefik")
         self.email = email
         self.network_name = network_name
@@ -25,9 +25,12 @@ class TraefikSetup(BaseSetup):
         if not self.check_root():
             return False
             
+        # Solicita email interativamente se não fornecido
         if not self.email:
-            self.logger.error("Email para SSL não fornecido")
-            return False
+            self.email = self._get_email_input()
+            if not self.email:
+                self.logger.error("Email para SSL é obrigatório")
+                return False
             
         # Verifica se Docker está instalado
         if not self.is_docker_running():
@@ -40,6 +43,16 @@ class TraefikSetup(BaseSetup):
             return False
             
         return True
+    
+    def _get_email_input(self) -> str:
+        """Solicita email do usuário interativamente"""
+        print("\n=== Configuração do Traefik ===")
+        while True:
+            email = input("Digite seu email para certificados SSL: ").strip()
+            if email and '@' in email and '.' in email:
+                return email
+            else:
+                print("Email inválido! Digite um email válido.")
     
     def is_docker_running(self) -> bool:
         """Verifica se Docker está rodando"""

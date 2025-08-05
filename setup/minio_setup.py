@@ -4,17 +4,66 @@ import subprocess
 import logging
 import secrets
 import string
+import os
+import time
 from .base_setup import BaseSetup
 from utils.template_engine import TemplateEngine
+from utils.portainer_api import PortainerAPI
 
 class MinioSetup(BaseSetup):
     def __init__(self):
-        super().__init__()
-        self.logger = logging.getLogger(__name__)
+        super().__init__("Instalação do MinIO")
         self.minio_user = None
         self.minio_password = None
         self.minio_domain = None
         self.s3_domain = None
+
+    def validate_prerequisites(self) -> bool:
+        """Valida pré-requisitos"""
+        if not self.check_root():
+            return False
+            
+        # Verifica se Docker está instalado
+        if not self.is_docker_running():
+            self.logger.error("Docker não está rodando")
+            return False
+            
+        # Verifica se Docker Swarm está ativo
+        if not self.is_swarm_active():
+            self.logger.error("Docker Swarm não está ativo")
+            return False
+            
+        return True
+
+    def is_docker_running(self) -> bool:
+        """Verifica se Docker está rodando"""
+        try:
+            result = subprocess.run(
+                "docker info",
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            return result.returncode == 0
+        except Exception as e:
+            self.logger.debug(f"Erro ao verificar Docker: {e}")
+            return False
+
+    def is_swarm_active(self) -> bool:
+        """Verifica se Docker Swarm está ativo"""
+        try:
+            result = subprocess.run(
+                "docker info --format '{{.Swarm.LocalNodeState}}'",
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            return result.returncode == 0 and result.stdout.strip() == 'active'
+        except Exception as e:
+            self.logger.debug(f"Erro ao verificar Swarm: {e}")
+            return False
 
     def generate_password(self, length=16):
         """Gera uma senha aleatória segura"""
@@ -71,39 +120,46 @@ class MinioSetup(BaseSetup):
             'network_name': 'orion_network'
         }
         
-        stack_file = template_engine.render_template(
-            'minio.yaml.j2', 
-            template_vars, 
-            '/tmp/minio.yaml'
+        # Renderiza o template
+        rendered_content = template_engine.render_template(
+            'docker-compose/minio.yaml.j2', 
+            template_vars
         )
         
-        if stack_file:
+        # Salva o arquivo renderizado
+        stack_file_path = '/tmp/minio.yaml'
+        try:
+            with open(stack_file_path, 'w') as f:
+                f.write(rendered_content)
             self.logger.info("Stack do MinIO criada com sucesso")
-            return stack_file
-        else:
-            self.logger.error("Erro ao criar stack do MinIO")
+            return stack_file_path
+        except Exception as e:
+            self.logger.error(f"Erro ao salvar stack do MinIO: {e}")
             return None
 
     def create_volume(self):
         """Cria o volume para MinIO"""
-        self.logger.info("Criando volume minio_data")
-        result = self.run_command(["docker", "volume", "create", "minio_data"])
-        if result.returncode == 0:
-            self.logger.info("Volume minio_data criado com sucesso")
-            return True
-        else:
-            self.logger.error("Erro ao criar volume minio_data")
-            return False
+        return self.run_command(
+            "docker volume create minio_data",
+            "criação do volume minio_data"
+        )
 
     def deploy_stack(self, stack_file):
-        """Faz deploy da stack MinIO"""
-        self.logger.info("Fazendo deploy da stack MinIO")
-        
-        result = self.run_command([
-            "docker", "stack", "deploy", 
-            "--prune", "--resolve-image", "always",
-            "-c", stack_file, "minio"
-        ])
+        """Faz deploy da stack MinIO via API do Portainer"""
+        try:
+            portainer = PortainerAPI()
+            success = portainer.deploy_stack("minio", stack_file)
+            
+            if success:
+                self.logger.info("Deploy da stack MinIO realizado com sucesso via API do Portainer")
+                return True
+            else:
+                self.logger.error("Falha no deploy da stack MinIO via API do Portainer")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Erro no deploy da stack MinIO: {e}")
+            return False
         
         if result.returncode == 0:
             self.logger.info("Stack MinIO deployada com sucesso")
@@ -120,14 +176,23 @@ class MinioSetup(BaseSetup):
         start_time = time.time()
         
         while time.time() - start_time < timeout:
-            result = self.run_command([
-                "docker", "service", "ps", "minio_minio", 
-                "--format", "{{.CurrentState}}"
-            ])
-            
-            if result.returncode == 0 and "Running" in result.stdout:
-                self.logger.info("MinIO está online")
-                return True
+            try:
+                result = subprocess.run(
+                    "docker service ps minio_minio --format '{{.CurrentState}}'",
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                
+                if result.returncode == 0 and "Running" in result.stdout:
+                    self.logger.info("MinIO está online")
+                    return True
+                    
+            except subprocess.TimeoutExpired:
+                self.logger.warning("Timeout ao verificar status do MinIO")
+            except Exception as e:
+                self.logger.warning(f"Erro ao verificar status do MinIO: {e}")
                 
             time.sleep(5)
         
@@ -136,16 +201,27 @@ class MinioSetup(BaseSetup):
 
     def verify_stack(self):
         """Verifica se a stack MinIO está rodando"""
-        result = self.run_command(["docker", "stack", "ls", "--format", "{{.Name}}"])
-        
-        if result.returncode == 0:
-            stacks = result.stdout.strip().split('\n')
-            if 'minio' in stacks:
-                self.logger.info("Stack do MinIO encontrada")
-                return True
-        
-        self.logger.error("Stack do MinIO não encontrada")
-        return False
+        try:
+            result = subprocess.run(
+                "docker stack ls --format '{{.Name}}'",
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                stacks = result.stdout.strip().split('\n')
+                if 'minio' in stacks:
+                    self.logger.info("Stack do MinIO encontrada")
+                    return True
+            
+            self.logger.error("Stack do MinIO não encontrada")
+            return False
+            
+        except Exception as e:
+            self.logger.error(f"Erro ao verificar stack MinIO: {e}")
+            return False
 
     def save_credentials(self):
         """Salva as credenciais do MinIO"""
@@ -174,7 +250,7 @@ aws configure set default.s3.addressing_style path
         
         try:
             # Cria diretório se não existir
-            self.run_command(["mkdir", "-p", "/root/dados_vps"])
+            os.makedirs("/root/dados_vps", exist_ok=True)
             
             with open("/root/dados_vps/dados_minio", 'w') as f:
                 f.write(credentials)
@@ -185,7 +261,7 @@ aws configure set default.s3.addressing_style path
             self.logger.error(f"Erro ao salvar credenciais: {e}")
             return False
 
-    def run_minio_setup(self):
+    def run(self):
         """Executa a instalação completa do MinIO"""
         self.logger.info("Iniciando instalação do MinIO")
         

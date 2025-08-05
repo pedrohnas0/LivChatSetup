@@ -21,9 +21,12 @@ class HostnameSetup(BaseSetup):
         if not self.check_root():
             return False
             
+        # Solicita hostname interativamente se não fornecido
         if not self.hostname:
-            self.logger.error("Hostname não fornecido")
-            return False
+            self.hostname = self._get_hostname_input()
+            if not self.hostname:
+                self.logger.error("Hostname é obrigatório")
+                return False
             
         # Valida formato do hostname
         if not self._validate_hostname_format(self.hostname):
@@ -31,6 +34,19 @@ class HostnameSetup(BaseSetup):
             return False
             
         return True
+    
+    def _get_hostname_input(self) -> str:
+        """Solicita hostname do usuário interativamente"""
+        print("\n=== Configuração de Hostname ===")
+        while True:
+            hostname = input("Digite o hostname do servidor: ").strip()
+            if hostname:
+                if self._validate_hostname_format(hostname):
+                    return hostname
+                else:
+                    print("Formato de hostname inválido. Use apenas letras, números e hífens.")
+            else:
+                print("Hostname é obrigatório!")
     
     def _validate_hostname_format(self, hostname: str) -> bool:
         """Valida o formato do hostname"""

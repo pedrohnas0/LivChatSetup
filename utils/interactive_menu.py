@@ -41,6 +41,9 @@ class InteractiveMenu:
         print(f"{self.VERDE}  ARMAZENAMENTO:{self.RESET}")
         print(f"{self.AMARELO}  [9]{self.BRANCO} MinIO (S3 Compatible Storage){self.RESET}")
         print()
+        print(f"{self.VERDE}  APLICAÇÕES:{self.RESET}")
+        print(f"{self.AMARELO} [12]{self.BRANCO} Chatwoot (Customer Support Platform){self.RESET}")
+        print()
         print(f"{self.VERDE}  UTILITÁRIOS:{self.RESET}")
         print(f"{self.AMARELO} [10]{self.BRANCO} Instalar Tudo (Básico + Docker + Traefik + Portainer){self.RESET}")
         print(f"{self.AMARELO} [11]{self.VERMELHO} Limpeza Completa do Ambiente{self.RESET}")
@@ -51,7 +54,7 @@ class InteractiveMenu:
     def get_user_choice(self):
         """Obtém a escolha do usuário"""
         try:
-            choice = input(f"{self.AMARELO}Digite sua opção [0-11]: {self.RESET}").strip()
+            choice = input(f"{self.AMARELO}Digite sua opção [0-12]: {self.RESET}").strip()
             return choice
         except KeyboardInterrupt:
             print(f"\n{self.VERMELHO}Operação cancelada pelo usuário.{self.RESET}")
@@ -112,6 +115,10 @@ class InteractiveMenu:
                 print(f"{self.AMARELO}Limpeza cancelada pelo usuário.{self.RESET}")
                 success = True
                 
+        elif choice == "12":
+            print(f"\n{self.VERDE}Executando instalação do Chatwoot...{self.RESET}")
+            success = self.coordinator.execute_module('chatwoot')
+                
         elif choice == "0":
             print(f"\n{self.BEGE}Saindo do menu...{self.RESET}")
             return False, True
@@ -126,23 +133,19 @@ class InteractiveMenu:
         """Instala o stack completo básico"""
         modules = ['basic', 'hostname', 'docker', 'traefik', 'portainer']
         
+        print(f"\n{self.AMARELO}=== Instalação Completa do Stack ==={self.RESET}")
+        print("Os módulos solicitarão as informações necessárias durante a execução.\n")
+        
         for module in modules:
-            print(f"\n📋 Executando módulo: {module}")
+            print(f"{self.BEGE}📋 Executando módulo: {module}{self.RESET}")
             
-            if module == 'traefik':
-                email = self.args.email or input("Digite seu email para certificados SSL: ")
-                success = self.coordinator.execute_module(module, email=email)
-            elif module == 'portainer':
-                domain = self.args.portainer_domain or input("Digite o domínio para o Portainer: ")
-                success = self.coordinator.execute_module(module, portainer_domain=domain)
-            else:
-                success = self.coordinator.execute_module(module)
+            success = self.coordinator.execute_module(module)
             
             if not success:
-                print(f"❌ Falha no módulo {module}. Interrompendo instalação.")
+                print(f"{self.VERMELHO}❌ Falha no módulo {module}. Interrompendo instalação.{self.RESET}")
                 return False
                 
-        print("\n✅ Instalação completa finalizada com sucesso!")
+        print(f"\n{self.VERDE}✅ Instalação completa finalizada com sucesso!{self.RESET}")
         return True
     
     def show_result(self, success, module_name=""):

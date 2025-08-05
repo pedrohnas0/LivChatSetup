@@ -22,6 +22,7 @@ from setup.redis_setup import RedisSetup
 from setup.postgres_setup import PostgresSetup
 from setup.pgvector_setup import PgVectorSetup
 from setup.minio_setup import MinioSetup
+from setup.chatwoot_setup import ChatwootSetup
 
 class ModuleCoordinator:
     """Coordenador simplificado dos módulos de setup"""
@@ -66,51 +67,48 @@ class ModuleCoordinator:
                 return basic_setup.run_basic_setup()
             
             elif module_name == 'hostname':
-                hostname_setup = HostnameSetup(self.args.hostname)
+                # Hostname será solicitado pelo próprio módulo se não fornecido
+                hostname_setup = HostnameSetup(kwargs.get('hostname') or self.args.hostname)
                 return hostname_setup.run()
             
             elif module_name == 'docker':
                 docker_setup = DockerSetup()
-                return docker_setup.run_docker_setup()
+                return docker_setup.run()
             
             elif module_name == 'traefik':
-                email = kwargs.get('email')
-                if not email:
-                    email = input("Digite seu email para certificados SSL: ")
-                traefik_setup = TraefikSetup()
-                return traefik_setup.run_traefik_setup(email)
+                # Email será solicitado pelo próprio módulo se não fornecido
+                traefik_setup = TraefikSetup(kwargs.get('email') or self.args.email)
+                return traefik_setup.run()
             
             elif module_name == 'portainer':
-                domain = kwargs.get('portainer_domain')
-                if not domain:
-                    domain = input("Digite o domínio para o Portainer: ")
-                portainer_setup = PortainerSetup()
-                return portainer_setup.run_portainer_setup(domain)
+                # Domínio será solicitado pelo próprio módulo se não fornecido
+                portainer_setup = PortainerSetup(kwargs.get('portainer_domain') or self.args.portainer_domain)
+                return portainer_setup.run()
             
             elif module_name == 'redis':
                 redis_setup = RedisSetup()
-                return redis_setup.run_redis_setup()
+                return redis_setup.run()
             
             elif module_name == 'postgres':
                 postgres_setup = PostgresSetup()
-                return postgres_setup.run_postgres_setup()
+                return postgres_setup.run()
             
             elif module_name == 'pgvector':
                 pgvector_setup = PgVectorSetup()
-                return pgvector_setup.run_pgvector_setup()
+                return pgvector_setup.run()
             
             elif module_name == 'minio':
+                # MinIO já solicita domínios internamente
                 minio_setup = MinioSetup()
-                return minio_setup.run_minio_setup()
+                return minio_setup.run()
+            
+            elif module_name == 'chatwoot':
+                chatwoot_setup = ChatwootSetup()
+                return chatwoot_setup.run()
             
             elif module_name == 'cleanup':
-                # Solicita confirmação para limpeza
-                confirm = input("ATENÇÃO: Isso irá remover TODOS os containers, volumes e redes do Docker Swarm. Confirma? (digite 'CONFIRMO'): ")
-                if confirm != 'CONFIRMO':
-                    self.logger.info("Limpeza cancelada pelo usuário")
-                    return False
                 cleanup_setup = CleanupSetup()
-                return cleanup_setup.run_cleanup_setup()
+                return cleanup_setup.run()
             
             else:
                 self.logger.error(f"Módulo '{module_name}' não encontrado")
@@ -168,22 +166,27 @@ class ModuleCoordinator:
     def run_redis_setup(self) -> bool:
         """Executa instalação do Redis"""
         redis_setup = RedisSetup()
-        return redis_setup.run_redis_setup()
+        return redis_setup.run()
     
     def run_postgres_setup(self) -> bool:
         """Executa instalação do PostgreSQL"""
         postgres_setup = PostgresSetup()
-        return postgres_setup.run_postgres_setup()
+        return postgres_setup.run()
     
     def run_pgvector_setup(self) -> bool:
         """Executa instalação do PostgreSQL + PgVector"""
         pgvector_setup = PgVectorSetup()
-        return pgvector_setup.run_pgvector_setup()
+        return pgvector_setup.run()
     
     def run_minio_setup(self) -> bool:
         """Executa instalação do MinIO (S3)"""
         minio_setup = MinioSetup()
-        return minio_setup.run_minio_setup()
+        return minio_setup.run()
+    
+    def run_chatwoot_setup(self) -> bool:
+        """Executa setup do Chatwoot"""
+        chatwoot_setup = ChatwootSetup()
+        return chatwoot_setup.run()
     
     def run_cleanup_setup(self) -> bool:
         """Executa limpeza completa"""
@@ -220,6 +223,7 @@ class ModuleCoordinator:
             'postgres': ('PostgreSQL', lambda: self.run_postgres_setup()),
             'pgvector': ('PostgreSQL + PgVector', lambda: self.run_pgvector_setup()),
             'minio': ('MinIO (S3)', lambda: self.run_minio_setup()),
+            'chatwoot': ('Chatwoot', lambda: self.run_chatwoot_setup()),
             'cleanup': ('Limpeza', lambda: self.run_cleanup_setup())
         }
     

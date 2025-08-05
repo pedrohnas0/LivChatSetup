@@ -225,9 +225,34 @@ class CleanupSetup(BaseSetup):
         
         return True
     
+    def _get_confirmation(self) -> bool:
+        """Solicita confirmação do usuário para limpeza"""
+        print("\n=== ATENÇÃO: LIMPEZA COMPLETA DO AMBIENTE ===")
+        print("Esta operação irá remover:")
+        print("- TODAS as stacks do Docker Swarm")
+        print("- TODOS os volumes do projeto")
+        print("- TODAS as redes do projeto")
+        print("- Sairá do Docker Swarm")
+        print("- Limpará containers, imagens e volumes não utilizados")
+        print("\nEsta ação É IRREVERSÍVEL!")
+        
+        while True:
+            confirm = input("\nDigite 'CONFIRMO' para prosseguir ou 'cancelar' para abortar: ").strip()
+            if confirm == 'CONFIRMO':
+                return True
+            elif confirm.lower() in ['cancelar', 'cancel', 'n', 'no']:
+                return False
+            else:
+                print("Resposta inválida. Digite 'CONFIRMO' ou 'cancelar'.")
+    
     def run(self) -> bool:
         """Executa a limpeza completa"""
         self.log_step_start("Limpeza do Ambiente Docker")
+        
+        # Solicita confirmação do usuário
+        if not self._get_confirmation():
+            self.logger.info("Limpeza cancelada pelo usuário")
+            return False
         
         if not self.validate_prerequisites():
             return False
