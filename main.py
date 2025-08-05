@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
 Sistema de Setup Modular
-Coordenador principal que executa todos os módulos de setup
+Sempre inicia pelo menu interativo
 """
 
 import os
 import sys
-import argparse
 import subprocess
 
 # Instala dependências automaticamente
@@ -22,154 +21,53 @@ def install_dependencies():
 # Instala dependências no início
 install_dependencies()
 
-# Importa coordenador de módulos
-from utils.module_coordinator import ModuleCoordinator
+# Importa menu interativo
 from utils.interactive_menu import InteractiveMenu
 from config import setup_logging
 
-class MainSetup:
-    """Coordenador principal simplificado"""
+def validate_prerequisites() -> bool:
+    """Valida pré-requisitos básicos"""
+    # Verifica privilégios root
+    if os.geteuid() != 0:
+        print("Este script deve ser executado como root")
+        print("Execute: sudo python3 main.py")
+        return False
     
-    def __init__(self, args):
-        self.args = args
-        self.logger = setup_logging()
-        self.coordinator = ModuleCoordinator(args)
-        
-    def validate_prerequisites(self) -> bool:
-        """Valida pré-requisitos básicos"""
-        # Verifica privilégios root
-        if os.geteuid() != 0:
-            print("Este script deve ser executado como root")
-            print("Execute: sudo python3 main.py")
-            return False
-        
-        # Módulos de banco de dados só podem ser executados pelo menu
-        database_modules = ['redis', 'postgres', 'pgvector', 'minio']
-        if (hasattr(self.args, 'module') and 
-            self.args.module in database_modules and 
-            not self.args.menu):
-            print(f"\n[ERRO] O módulo '{self.args.module}' só pode ser executado pelo menu interativo.")
-            print("Use: python3 main.py --menu")
-            print("\nMotivo: Os módulos de banco de dados requerem integração com o Portainer")
-            print("e devem seguir o fluxo completo de configuração via menu.\n")
-            return False
-        
-        # Valida hostname apenas se não for cleanup e não for interativo
-        if (not self.args.hostname and 
-            self.args.module != 'cleanup' and 
-            not self.args.interactive and
-            not self.args.menu):
-            print("Nome do servidor não fornecido. Use --hostname ou --interactive")
-            return False
-            
-        return True
-    
-    def run_setup(self):
-        """Executa o setup com base nos argumentos fornecidos"""
-        # Se menu interativo foi solicitado
-        if self.args.menu:
-            menu = InteractiveMenu(self.args)
-            return menu.run()
-        
-        self.logger.info("Iniciando setup do sistema")
-        
-        # Delega execução para o coordenador
-        coordinator = ModuleCoordinator(self.args)
-        success = coordinator.run_modules()
-        
-        if success:
-            self.logger.info("Setup concluído com sucesso")
-        else:
-            self.logger.error("Setup falhou")
-            
-        return success
+    return True
 
-    def run(self) -> bool:
-        """Executa o setup principal"""
-        if not self.validate_prerequisites():
-            return False
-        
-        # Delega toda a execução para o coordenador
-        success = self.run_setup()
-        self.coordinator.show_summary(success)
-        
-        return success
-
-def parse_arguments():
-    """Parse dos argumentos da linha de comando"""
-    parser = argparse.ArgumentParser(
-        description="Sistema de Setup Modular para Servidores Linux",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Exemplos de uso:
-  sudo python3 main.py --hostname meuservidor --email admin@dominio.com --portainer-domain portainer.dominio.com
-  sudo python3 main.py --interactive
-  sudo python3 main.py --hostname srv01 --module docker
-  sudo python3 main.py --hostname srv01 --email ssl@dominio.com --module traefik
-  sudo python3 main.py --hostname srv01 --portainer-domain portainer.dominio.com --module portainer
-        """
-    )
+def run_setup() -> bool:
+    """Executa o menu interativo"""
+    logger = setup_logging()
+    logger.info("Iniciando sistema de setup - Menu Interativo")
     
-    parser.add_argument(
-        "--hostname",
-        help="Nome do servidor (hostname)"
-    )
+    # Cria objeto args vazio para compatibilidade
+    class EmptyArgs:
+        def __init__(self):
+            self.hostname = None
+            self.email = None
+            self.portainer_domain = None
+            self.network_name = 'orion_network'
+            self.menu = True
+            self.interactive = True
+            self.module = None
+            self.no_swarm = False
+            self.stop_on_error = False
+            self.debug = False
     
-    parser.add_argument(
-        "--email",
-        help="Email para certificados SSL do Traefik"
-    )
-    
-    parser.add_argument('--portainer-domain', type=str, help='Domínio para o Portainer')
-    parser.add_argument('--network-name', type=str, default='orion_network', help='Nome da rede Docker')
-    parser.add_argument('--menu', action='store_true', help='Executa o menu interativo')
-    
-    parser.add_argument(
-        "--interactive", "-i",
-        action="store_true",
-        help="Modo interativo (pergunta as informações)"
-    )
-    
-    parser.add_argument(
-        "--module", "-m",
-        choices=["basic", "hostname", "docker", "traefik", "portainer", "redis", "postgres", "pgvector", "minio", "cleanup"],
-        help="Executa apenas um módulo específico"
-    )
-    
-    parser.add_argument(
-        "--no-swarm",
-        action="store_true",
-        help="Instala Docker sem inicializar Swarm"
-    )
-    
-    parser.add_argument(
-        "--stop-on-error",
-        action="store_true",
-        help="Para execução no primeiro erro"
-    )
-    
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Habilita logs de debug"
-    )
-    
-    return parser.parse_args()
+    # Sempre executa o menu interativo
+    menu = InteractiveMenu(EmptyArgs())
+    return menu.run()
 
 def main():
-    """Função principal"""
-    args = parse_arguments()
+    """Função principal - sempre inicia pelo menu interativo"""
+    print("\n=== Sistema de Setup Modular ===\n")
     
-    # Configura nível de log se debug
-    if args.debug:
-        import logging
-        logging.getLogger().setLevel(logging.DEBUG)
-    
-    # Executa setup
-    setup = MainSetup(args)
+    # Valida pré-requisitos
+    if not validate_prerequisites():
+        sys.exit(1)
     
     try:
-        success = setup.run()
+        success = run_setup()
         sys.exit(0 if success else 1)
     except KeyboardInterrupt:
         print("\nOperação cancelada pelo usuário.")

@@ -21,9 +21,9 @@ class InteractiveMenu:
         
     def show_menu(self):
         """Exibe o menu principal sem limpar o terminal"""
-        print(f"\n{self.BRANCO}## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##{self.RESET}")
-        print(f"{self.BRANCO}##                           {self.VERDE}SETUP LIVCHAT - MENU PRINCIPAL{self.BRANCO}                                  ##{self.RESET}")
-        print(f"{self.BRANCO}## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##{self.RESET}")
+        print(f"\n{self.BRANCO}## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ##{self.RESET}")
+        print(f"{self.BRANCO}##                           {self.VERDE}SETUP LIVCHAT - MENU PRINCIPAL{self.BRANCO}                                     ##{self.RESET}")
+        print(f"{self.BRANCO}## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ##{self.RESET}")
         print()
         print(f"{self.BEGE}Escolha a aplicação que deseja instalar:{self.RESET}")
         print()
@@ -49,7 +49,7 @@ class InteractiveMenu:
         print(f"{self.AMARELO} [11]{self.VERMELHO} Limpeza Completa do Ambiente{self.RESET}")
         print(f"{self.AMARELO}  [0]{self.BEGE} Sair{self.RESET}")
         print()
-        print(f"{self.BRANCO}## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##{self.RESET}")
+        print(f"{self.BRANCO}## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ##{self.RESET}")
         
     def get_user_choice(self):
         """Obtém a escolha do usuário"""

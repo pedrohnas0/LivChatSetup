@@ -363,34 +363,93 @@ class PortainerAPI:
                 return False
         return True
     
-    def wait_for_service(self, service_name: str, timeout: int = 120) -> bool:
-        """Aguarda serviço ficar online"""
+    def wait_for_service(self, service_name: str, timeout: int = 300) -> bool:
+        """Aguarda serviço ficar online usando docker service ls como o script original"""
         start_time = time.time()
         
         self.logger.info(f"Aguardando {service_name} ficar online (timeout: {timeout}s)")
+        self.logger.info("Este processo pode demorar um pouco. Se levar mais de 5 minutos, algo deu errado.")
         
         while time.time() - start_time < timeout:
             try:
                 result = subprocess.run(
-                    f"docker service ps {service_name} --format '{{.CurrentState}}'",
+                    f'docker service ls --filter "name={service_name}" --format "{{{{.Name}}}} {{{{.Replicas}}}}"',
                     shell=True,
                     capture_output=True,
                     text=True,
                     timeout=30
                 )
                 
-                if result.returncode == 0 and "Running" in result.stdout:
-                    self.logger.info(f"{service_name} está online")
-                    return True
-                    
+                if result.returncode == 0 and result.stdout.strip():
+                    # Verifica se o serviço está 1/1 (running)
+                    if "1/1" in result.stdout:
+                        self.logger.info(f"🟢 O serviço {service_name} está online")
+                        return True
+                    else:
+                        self.logger.debug(f"Serviço {service_name}: {result.stdout.strip()}")
+                        
             except subprocess.TimeoutExpired:
                 self.logger.warning(f"Timeout ao verificar status do {service_name}")
             except Exception as e:
                 self.logger.warning(f"Erro ao verificar status do {service_name}: {e}")
                 
-            time.sleep(5)
+            time.sleep(30)  # Aguarda 30s como o script original
         
         self.logger.error(f"Timeout aguardando {service_name} ficar online")
+        return False
+    
+    def wait_for_multiple_services(self, services: list, timeout: int = 300) -> bool:
+        """Aguarda múltiplos serviços ficarem online como o script original"""
+        start_time = time.time()
+        services_status = {service: "pendente" for service in services}
+        
+        self.logger.info(f"Aguardando serviços ficarem online: {', '.join(services)}")
+        self.logger.info("Este processo pode demorar um pouco. Se levar mais de 5 minutos, algo deu errado.")
+        
+        while time.time() - start_time < timeout:
+            all_active = True
+            self.logger.debug(f"Verificando serviços... Tempo decorrido: {int(time.time() - start_time)}s")
+            
+            for service in services:
+                try:
+                    self.logger.debug(f"Verificando serviço: {service}")
+                    result = subprocess.run(
+                        f'docker service ls --filter "name={service}" --format "{{{{.Name}}}} {{{{.Replicas}}}}"',
+                        shell=True,
+                        capture_output=True,
+                        text=True,
+                        timeout=30
+                    )
+                    
+                    self.logger.debug(f"Resultado para {service}: returncode={result.returncode}, stdout='{result.stdout.strip()}'")
+                    
+                    if result.returncode == 0 and "1/1" in result.stdout:
+                        if services_status[service] != "ativo":
+                            self.logger.info(f"🟢 O serviço {service} está online")
+                            services_status[service] = "ativo"
+                    else:
+                        self.logger.debug(f"Serviço {service} não está 1/1: '{result.stdout.strip()}'")
+                        if services_status[service] != "pendente":
+                            services_status[service] = "pendente"
+                        all_active = False
+                        
+                except Exception as e:
+                    self.logger.debug(f"Erro ao verificar {service}: {e}")
+                    all_active = False
+            
+            self.logger.debug(f"Status dos serviços: {services_status}")
+            self.logger.debug(f"Todos ativos: {all_active}")
+            
+            # Sai do loop quando todos os serviços estiverem ativos
+            if all_active:
+                self.logger.info("Todos os serviços estão online!")
+                time.sleep(1)
+                return True
+                
+            self.logger.debug("Aguardando 30s antes da próxima verificação...")
+            time.sleep(30)
+        
+        self.logger.error(f"Timeout aguardando serviços ficarem online")
         return False
     
     def verify_stack_running(self, stack_name: str) -> bool:
@@ -455,6 +514,7 @@ class PortainerAPI:
                               template_vars: Dict[str, Any],
                               volumes: List[str] = None,
                               wait_service: str = None,
+                              wait_services: List[str] = None,
                               credentials: Dict[str, Any] = None) -> bool:
         """Deploy completo de um serviço com todas as etapas"""
         try:
@@ -480,8 +540,11 @@ class PortainerAPI:
             if not self.deploy_stack(service_name, stack_path):
                 return False
             
-            # 5. Aguardar serviço se especificado
-            if wait_service:
+            # 5. Aguardar serviço(s) se especificado
+            if wait_services:
+                if not self.wait_for_multiple_services(wait_services):
+                    return False
+            elif wait_service:
                 if not self.wait_for_service(wait_service):
                     return False
             

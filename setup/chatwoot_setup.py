@@ -155,7 +155,7 @@ class ChatwootSetup(BaseSetup):
                     "chatwoot_mailers",
                     "chatwoot_redis"
                 ],
-                wait_service="chatwoot_app",
+                wait_services=["chatwoot_chatwoot_redis", "chatwoot_chatwoot_app", "chatwoot_chatwoot_sidekiq"],
                 credentials={
                     'domain': variables['domain'],
                     'company_name': variables['company_name'],
@@ -169,14 +169,160 @@ class ChatwootSetup(BaseSetup):
             )
             
             if success:
-                self.logger.info("Instalação do Chatwoot concluída com sucesso")
-                self.logger.info(f"Acesse: https://{variables['domain']}")
-                self.logger.info(f"Chave de criptografia: {variables['encryption_key']}")
-                return True
+                # Executa migrações do banco de dados
+                if self.run_database_migrations():
+                    self.logger.info("Instalação do Chatwoot concluída com sucesso")
+                    self.logger.info(f"Acesse: https://{variables['domain']}")
+                    self.logger.info(f"Chave de criptografia: {variables['encryption_key']}")
+                    return True
+                else:
+                    self.logger.error("Falha nas migrações do banco de dados")
+                    return False
             else:
                 self.logger.error("Falha na instalação do Chatwoot")
                 return False
             
         except Exception as e:
             self.logger.error(f"Erro durante instalação do Chatwoot: {e}")
+            return False
+    
+    def find_chatwoot_container(self, max_wait_time=300, wait_interval=10):
+        """Encontra o container do Chatwoot app aguardando até ele estar disponível"""
+        import time
+        import subprocess
+        
+        self.logger.info("Aguardando container do Chatwoot ficar disponível...")
+        elapsed_time = 0
+        
+        while elapsed_time < max_wait_time:
+            try:
+                result = subprocess.run(
+                    "docker ps -q --filter 'name=chatwoot_chatwoot_app'",
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                
+                if result.returncode == 0 and result.stdout.strip():
+                    container_id = result.stdout.strip()
+                    
+                    # Verifica se o container está realmente pronto
+                    if self._is_container_ready(container_id):
+                        self.logger.info(f"Container pronto: {container_id}")
+                        return container_id
+                    else:
+                        self.logger.info(f"Container encontrado mas ainda não está pronto: {container_id}")
+                    
+            except Exception as e:
+                self.logger.debug(f"Erro ao procurar container: {e}")
+            
+            time.sleep(wait_interval)
+            elapsed_time += wait_interval
+            
+            if elapsed_time % 60 == 0:  # Log a cada minuto
+                self.logger.info(f"Aguardando... ({elapsed_time}/{max_wait_time}s)")
+        
+        self.logger.error(f"Container não encontrado após {max_wait_time} segundos")
+        return None
+    
+    def _is_container_ready(self, container_id):
+        """Verifica se o container está pronto para receber comandos"""
+        import subprocess
+        
+        try:
+            # Tenta executar um comando simples para verificar se o container responde
+            result = subprocess.run(
+                f"docker exec {container_id} echo 'ready'",
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            return result.returncode == 0 and "ready" in result.stdout
+        except Exception:
+            return False
+    
+    def _fix_postgres_password(self):
+        """Corrige a senha do usuário postgres no banco de dados"""
+        import subprocess
+        
+        try:
+            # Obtém a senha do PgVector
+            pgvector_password = self._get_pgvector_password()
+            if not pgvector_password:
+                self.logger.error("Não foi possível obter a senha do PgVector")
+                return False
+            
+            # Encontra o container do PgVector
+            result = subprocess.run(
+                "docker ps -q --filter 'name=pgvector_pgvector'",
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0 or not result.stdout.strip():
+                self.logger.error("Container do PgVector não encontrado")
+                return False
+            
+            pgvector_container = result.stdout.strip()
+            
+            # Atualiza a senha do usuário postgres
+            self.logger.info("Corrigindo senha do usuário postgres no banco de dados")
+            result = subprocess.run(
+                f"docker exec {pgvector_container} psql -U postgres -c \"ALTER USER postgres PASSWORD '{pgvector_password}';\"",
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            
+            if result.returncode == 0:
+                self.logger.info("Senha do PostgreSQL corrigida com sucesso")
+                return True
+            else:
+                self.logger.error(f"Erro ao corrigir senha do PostgreSQL: {result.stderr}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Erro durante correção da senha do PostgreSQL: {e}")
+            return False
+    
+    def run_database_migrations(self):
+        """Executa as migrações do banco de dados do Chatwoot"""
+        import subprocess
+        
+        # Encontra o container do Chatwoot
+        container_id = self.find_chatwoot_container()
+        if not container_id:
+            return False
+        
+        # Corrige a senha do PostgreSQL no banco
+        if not self._fix_postgres_password():
+            self.logger.warning("Não foi possível corrigir a senha do PostgreSQL, tentando continuar...")
+        
+        try:
+            # Executa rails db:chatwoot_prepare (comando específico do Chatwoot para setup inicial)
+            self.logger.info("Executando: bundle exec rails db:chatwoot_prepare")
+            result = subprocess.run(
+                f"docker exec {container_id} bundle exec rails db:chatwoot_prepare",
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=600
+            )
+            
+            if result.returncode == 0:
+                self.logger.info("[ OK ] - Executando: bundle exec rails db:chatwoot_prepare")
+                self.logger.info("Setup inicial do Chatwoot concluído com sucesso")
+                return True
+            else:
+                self.logger.error("[ ERRO ] - Falha no setup inicial do Chatwoot")
+                self.logger.error(f"Erro: {result.stderr}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Erro durante migrações: {e}")
             return False
