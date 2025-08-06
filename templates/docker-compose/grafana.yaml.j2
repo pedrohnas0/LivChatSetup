@@ -1,0 +1,159 @@
+version: "3.7"
+
+services:
+  ## 📊 Prometheus - Coleta de Métricas
+  prometheus:
+    image: prom/prometheus:latest
+    
+    volumes:
+      - prometheus_data:/prometheus
+      - /opt/monitor-orion/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    
+    networks:
+      - {{ network_name }}
+    
+    ports:
+      - "9191:9090"
+    
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network={{ network_name }}
+        - traefik.http.routers.prometheus.rule=Host(`{{ prometheus_domain }}`)
+        - traefik.http.routers.prometheus.entrypoints=websecure
+        - traefik.http.routers.prometheus.priority=1
+        - traefik.http.routers.prometheus.tls.certresolver=letsencryptresolver
+        - traefik.http.routers.prometheus.service=prometheus
+        - traefik.http.services.prometheus.loadbalancer.server.port=9090
+
+  ## 📈 Grafana - Dashboard de Visualização
+  grafana:
+    image: grafana/grafana:latest
+    
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - /opt/monitor-orion/grafana/grafana.ini:/etc/grafana/grafana.ini
+      - /opt/monitor-orion/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - /opt/monitor-orion/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - /opt/monitor-orion/grafana/dashboards:/etc/grafana/dashboards
+    
+    networks:
+      - {{ network_name }}
+    
+    ports:
+      - "3111:3000"
+    
+    depends_on:
+      - prometheus
+    
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network={{ network_name }}
+        - traefik.http.routers.grafana.rule=Host(`{{ grafana_domain }}`)
+        - traefik.http.routers.grafana.entrypoints=websecure
+        - traefik.http.routers.grafana.priority=1
+        - traefik.http.routers.grafana.tls.certresolver=letsencryptresolver
+        - traefik.http.routers.grafana.service=grafana
+        - traefik.http.services.grafana.loadbalancer.server.port=3000
+
+  ## 🖥️ Node Exporter - Métricas do Sistema
+  node-exporter:
+    image: prom/node-exporter:latest
+    
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    
+    networks:
+      - {{ network_name }}
+    
+    ports:
+      - "9100:9100"
+    
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network={{ network_name }}
+        - traefik.http.routers.node-exporter.rule=Host(`{{ nodeexporter_domain }}`)
+        - traefik.http.routers.node-exporter.entrypoints=websecure
+        - traefik.http.routers.node-exporter.priority=1
+        - traefik.http.routers.node-exporter.tls.certresolver=letsencryptresolver
+        - traefik.http.routers.node-exporter.service=node-exporter
+        - traefik.http.services.node-exporter.loadbalancer.server.port=9100
+
+  ## 🐳 cAdvisor - Monitoramento de Containers
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    
+    privileged: true
+    
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    
+    networks:
+      - {{ network_name }}
+    
+    ports:
+      - "8181:8080"
+    
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network={{ network_name }}
+        - traefik.http.routers.cadvisor.rule=Host(`{{ cadvisor_domain }}`)
+        - traefik.http.routers.cadvisor.entrypoints=websecure
+        - traefik.http.routers.cadvisor.priority=1
+        - traefik.http.routers.cadvisor.tls.certresolver=letsencryptresolver
+        - traefik.http.routers.cadvisor.service=cadvisor
+        - traefik.http.services.cadvisor.loadbalancer.server.port=8080
+
+## 💾 Volumes
+volumes:
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+## 🌐 Networks
+networks:
+  {{ network_name }}:
+    name: {{ network_name }}
+    external: true

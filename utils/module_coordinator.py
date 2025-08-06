@@ -24,6 +24,7 @@ from setup.pgvector_setup import PgVectorSetup
 from setup.minio_setup import MinioSetup
 from setup.chatwoot_setup import ChatwootSetup
 from setup.n8n_setup import N8NSetup
+from setup.grafana_setup import GrafanaSetup
 
 class ModuleCoordinator:
     """Coordenador simplificado dos módulos de setup"""
@@ -110,6 +111,10 @@ class ModuleCoordinator:
             elif module_name == 'n8n':
                 n8n_setup = N8NSetup()
                 return n8n_setup.install()
+            
+            elif module_name == 'grafana':
+                grafana_setup = GrafanaSetup()
+                return grafana_setup.run()
             
             elif module_name == 'cleanup':
                 cleanup_setup = CleanupSetup()
