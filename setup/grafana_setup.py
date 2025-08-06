@@ -125,7 +125,7 @@ class GrafanaSetup(BaseSetup):
                 domain = user_data[domain_key]
                 self.logger.info(f"🔧 Configurando DNS para {service_name}: {domain}")
                 
-                success = cloudflare_api.create_or_update_cname_record(
+                success = cloudflare_api.create_cname_record(
                     domain, 
                     "ptn.dev.livchat.ai"
                 )
@@ -148,11 +148,33 @@ class GrafanaSetup(BaseSetup):
         try:
             self.logger.info("📝 Criando arquivos de configuração...")
             
-            # Cria diretório base
-            os.makedirs("/opt/monitor-orion/prometheus", exist_ok=True)
-            os.makedirs("/opt/monitor-orion/grafana/provisioning/datasources", exist_ok=True)
-            os.makedirs("/opt/monitor-orion/grafana/provisioning/dashboards", exist_ok=True)
-            os.makedirs("/opt/monitor-orion/grafana/dashboards", exist_ok=True)
+            # Remove diretório existente se houver
+            if os.path.exists("/opt/monitor-orion"):
+                subprocess.run("rm -rf /opt/monitor-orion", shell=True)
+            
+            # Baixa dashboards prontos do repositório original
+            self.logger.info("📥 Baixando dashboards do Grafana...")
+            subprocess.run("cd /tmp && rm -rf SetupOrion", shell=True)
+            result = subprocess.run(
+                "cd /tmp && git clone https://github.com/oriondesign2015/SetupOrion.git > /dev/null 2>&1",
+                shell=True
+            )
+            
+            if result.returncode == 0:
+                # Move dashboards para o local correto
+                subprocess.run(
+                    "mv /tmp/SetupOrion/Extras/Grafana/monitor-orion /opt/",
+                    shell=True
+                )
+                subprocess.run("cd /tmp && rm -rf SetupOrion", shell=True)
+                self.logger.info("✅ Dashboards baixados com sucesso")
+            else:
+                self.logger.warning("⚠️ Falha ao baixar dashboards, criando estrutura básica...")
+                # Cria diretório base
+                os.makedirs("/opt/monitor-orion/prometheus", exist_ok=True)
+                os.makedirs("/opt/monitor-orion/grafana/provisioning/datasources", exist_ok=True)
+                os.makedirs("/opt/monitor-orion/grafana/provisioning/dashboards", exist_ok=True)
+                os.makedirs("/opt/monitor-orion/grafana/dashboards", exist_ok=True)
             
             # Cria prometheus.yml
             prometheus_config = f"""global:
@@ -255,10 +277,10 @@ enabled = false
             self.logger.info("🚀 Fazendo deploy do Stack de Monitoramento...")
             
             success = self.portainer_api.deploy_service_complete(
-                stack_name="grafana",
-                template_path="/root/CascadeProjects/templates/docker-compose/grafana.yaml.j2",
+                service_name="grafana",
+                template_path="docker-compose/grafana.yaml.j2",
                 template_vars=variables,
-                services_to_wait=[
+                wait_services=[
                     "grafana_prometheus",
                     "grafana_grafana", 
                     "grafana_node-exporter",

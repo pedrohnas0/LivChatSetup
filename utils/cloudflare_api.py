@@ -263,10 +263,15 @@ class CloudflareAPI:
             return False
     
     def create_cname_record(self, name, target):
-        """Cria um registro CNAME"""
+        """Cria um registro CNAME (ou verifica se já existe)"""
         if not self.zone_id:
             self.logger.error("❌ Zone ID não encontrado")
             return False
+        
+        # Primeiro verifica se o registro já existe
+        if self.check_dns_record(name, "CNAME"):
+            self.logger.info(f"✅ Registro CNAME já existe: {name} -> {target}")
+            return True
             
         url = f"{self.base_url}/zones/{self.zone_id}/dns_records"
         data = {
@@ -281,6 +286,11 @@ class CloudflareAPI:
             
             response = requests.post(url, headers=self.headers, json=data)
             self._log_request("POST", url, data, response)
+            
+            if response.status_code == 400:
+                # Registro já existe, considerar como sucesso
+                self.logger.info(f"✅ Registro CNAME já existe: {name} -> {target}")
+                return True
             
             response.raise_for_status()
             
