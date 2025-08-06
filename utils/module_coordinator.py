@@ -23,6 +23,7 @@ from setup.postgres_setup import PostgresSetup
 from setup.pgvector_setup import PgVectorSetup
 from setup.minio_setup import MinioSetup
 from setup.chatwoot_setup import ChatwootSetup
+from setup.n8n_setup import N8NSetup
 
 class ModuleCoordinator:
     """Coordenador simplificado dos módulos de setup"""
@@ -105,6 +106,10 @@ class ModuleCoordinator:
             elif module_name == 'chatwoot':
                 chatwoot_setup = ChatwootSetup()
                 return chatwoot_setup.run()
+            
+            elif module_name == 'n8n':
+                n8n_setup = N8NSetup()
+                return n8n_setup.install()
             
             elif module_name == 'cleanup':
                 cleanup_setup = CleanupSetup()

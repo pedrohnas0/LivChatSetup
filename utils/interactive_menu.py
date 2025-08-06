@@ -43,6 +43,7 @@ class InteractiveMenu:
         print()
         print(f"{self.VERDE}  APLICAÇÕES:{self.RESET}")
         print(f"{self.AMARELO} [12]{self.BRANCO} Chatwoot (Customer Support Platform){self.RESET}")
+        print(f"{self.AMARELO} [13]{self.BRANCO} N8N (Workflow Automation + Cloudflare DNS){self.RESET}")
         print()
         print(f"{self.VERDE}  UTILITÁRIOS:{self.RESET}")
         print(f"{self.AMARELO} [10]{self.BRANCO} Instalar Tudo (Básico + Docker + Traefik + Portainer){self.RESET}")
@@ -118,6 +119,10 @@ class InteractiveMenu:
         elif choice == "12":
             print(f"\n{self.VERDE}Executando instalação do Chatwoot...{self.RESET}")
             success = self.coordinator.execute_module('chatwoot')
+                
+        elif choice == "13":
+            print(f"\n{self.VERDE}Executando instalação do N8N...{self.RESET}")
+            success = self.coordinator.execute_module('n8n')
                 
         elif choice == "0":
             print(f"\n{self.BEGE}Saindo do menu...{self.RESET}")

@@ -1,0 +1,50 @@
+# REGRAS DO PROJETO LIVCHAT SETUP
+
+## TESTES
+- Sempre testar executando `python3 main.py` e usar menu interativo
+- Observar terminal para obter informações de execução
+- Nunca executar testes isolados de módulos
+
+## LOGS
+- Logs sempre em DEBUG para depuração completa
+- Exibir todas as linhas no terminal
+- Requests/responses da Cloudflare sempre detalhados
+
+## ARQUITETURA
+```
+/root/CascadeProjects/
+├── main.py                    # Entry point (sempre menu)
+├── config.py                  # Logs/configurações
+├── setup/                     # Módulos instalação
+│   ├── base_setup.py          # Classe base
+│   ├── basic_setup.py         # Sistema básico
+│   ├── docker_setup.py        # Docker + Swarm
+│   ├── traefik_setup.py       # Proxy reverso
+│   ├── portainer_setup.py     # Gerenciador Docker
+│   ├── redis_setup.py         # Cache
+│   ├── postgres_setup.py      # Banco relacional
+│   ├── pgvector_setup.py      # Banco vetorial
+│   ├── minio_setup.py         # Storage S3
+│   ├── chatwoot_setup.py      # Customer support
+│   └── n8n_setup.py           # Workflow automation
+├── utils/                     # Utilitários
+│   ├── interactive_menu.py    # Menu principal
+│   ├── module_coordinator.py  # Coordenador módulos
+│   ├── portainer_api.py       # API Portainer
+│   ├── cloudflare_api.py      # API Cloudflare
+│   └── template_engine.py     # Templates Jinja2
+└── templates/docker-compose/  # Templates serviços
+```
+
+## FLUXO
+1. main.py → InteractiveMenu
+2. Menu → ModuleCoordinator.execute_module()
+3. Módulo coleta inputs → deploy via PortainerAPI
+4. Cloudflare DNS automático (quando aplicável)
+5. Aguarda serviços online → salva credenciais
+
+## INTEGRAÇÃO CLOUDFLARE
+- Utilitário reutilizável: utils/cloudflare_api.py
+- Credenciais persistidas: /root/dados_vps/dados_cloudflare
+- DNS automático para apps com domínios
+- Logs detalhados de requests/responses
