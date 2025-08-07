@@ -276,13 +276,15 @@ echo -e "$verde=================================================================
 echo -e "$verde=                                                                                                 $verde=$reset"
 echo -e "$verde=                           $branco✅ INSTALAÇÃO CONCLUÍDA COM SUCESSO! ✅$verde                           =$reset"
 echo -e "$verde=                                                                                                 $verde=$reset"
-echo -e "$verde=                              $branco Para iniciar o LivChat Setup, execute:$verde                        =$reset"
-echo -e "$verde=                                                                                                 $verde=$reset"
-echo -e "$verde=                                    $amarelo cd /root/LivChatSetup$verde                                    =$reset"
-echo -e "$verde=                                    $amarelo python3 main.py$verde                                         =$reset"
+echo -e "$verde=                              $branco Iniciando LivChat Setup automaticamente...$verde                     =$reset"
 echo -e "$verde=                                                                                                 $verde=$reset"
 echo -e "$verde===================================================================================================$reset"
 echo ""
+echo ""
+sleep 2
+
+# Executa o LivChat Setup automaticamente
+python3 main.py
 
 ## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##
 ##                                         LIVCHAT SETUP                                       ##
