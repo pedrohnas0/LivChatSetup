@@ -1,0 +1,68 @@
+version: "3.7"
+services:
+
+## --------------------------- GOWA --------------------------- ##
+
+  {{ service_name }}:
+    image: aldinokemal2104/go-whatsapp-web-multidevice:latest ## Imagem oficial GOWA
+    container_name: {{ service_name }}
+    restart: always
+    
+    networks:
+      - {{ network_name }} ## Nome da rede interna
+    
+    # Sem exposição direta de porta - acesso apenas via Traefik/HTTPS
+    
+    environment:
+      ## 🔧 Configurações Básicas
+      - APP_PORT=3000
+      - APP_DEBUG=false
+      - APP_OS=Chrome
+      
+      ## 🔐 Autenticação Básica Obrigatória
+      - APP_BASIC_AUTH={{ basic_auth }}
+      
+      ## 📂 Caminho Base (comentado para configuração inicial)
+      # - APP_BASE_PATH={{ base_path }}
+      
+      ## 💾 Banco de Dados (comentado para configuração inicial)
+      # - DB_URI={{ database_uri }}
+      
+      ## 🤖 Auto Reply (comentado para configuração inicial)
+      # - WHATSAPP_AUTO_REPLY={{ auto_reply_message }}
+      # - WHATSAPP_AUTO_MARK_READ={{ auto_mark_read }}
+      
+      ## 🔗 Webhook (comentado para configuração inicial)
+      # - WHATSAPP_WEBHOOK={{ webhook_url }}
+      # - WHATSAPP_WEBHOOK_SECRET={{ webhook_secret }}
+      
+      ## ✅ Validações (comentado para configuração inicial)
+      # - WHATSAPP_ACCOUNT_VALIDATION={{ account_validation }}
+      # - WHATSAPP_CHAT_STORAGE={{ chat_storage }}
+    
+    volumes:
+      - {{ service_name }}_data:/app/storages ## Volume para armazenamento persistente
+    
+    command: ["rest"] ## Modo REST API
+    
+    labels:
+      ## 🌐 Traefik - Proxy Reverso
+      - "traefik.enable=true"
+      - "traefik.docker.network={{ network_name }}"
+      
+      ## 📍 Roteamento HTTP
+      - "traefik.http.routers.{{ service_name }}.rule=Host(`{{ domain }}`)"
+      - "traefik.http.routers.{{ service_name }}.entrypoints=websecure"
+      - "traefik.http.routers.{{ service_name }}.tls.certresolver=letsencryptresolver"
+      
+      ## 🎯 Serviço
+      - "traefik.http.services.{{ service_name }}.loadbalancer.server.port=3000"
+
+## --------------------------- VOLUMES --------------------------- ##
+volumes:
+  {{ service_name }}_data:
+
+## --------------------------- REDE --------------------------- ##
+networks:
+  {{ network_name }}:
+    external: true

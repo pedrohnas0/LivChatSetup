@@ -1,5 +1,11 @@
 # REGRAS DO PROJETO LIVCHAT SETUP
 
+## GIT E COMMITS
+- Só fazer commits quando o usuário solicitar explicitamente
+- Após testes bem-sucedidos feitos pelo usuário, pode commitar as alterações
+- Mensagens de commit devem ser claras e detalhadas
+- Sempre verificar as alterações com `git status` antes de commitar
+
 ## TESTES
 - Sempre testar executando `python3 main.py` e usar menu interativo
 - Observar terminal para obter informações de execução
@@ -18,33 +24,162 @@
 ├── setup/                     # Módulos instalação
 │   ├── base_setup.py          # Classe base
 │   ├── basic_setup.py         # Sistema básico
-│   ├── docker_setup.py        # Docker + Swarm
-│   ├── traefik_setup.py       # Proxy reverso
-│   ├── portainer_setup.py     # Gerenciador Docker
-│   ├── redis_setup.py         # Cache
-│   ├── postgres_setup.py      # Banco relacional
-│   ├── pgvector_setup.py      # Banco vetorial
-│   ├── minio_setup.py         # Storage S3
-│   ├── chatwoot_setup.py      # Customer support
-│   └── n8n_setup.py           # Workflow automation
-├── utils/                     # Utilitários
-│   ├── interactive_menu.py    # Menu principal
-│   ├── module_coordinator.py  # Coordenador módulos
-│   ├── portainer_api.py       # API Portainer
-│   ├── cloudflare_api.py      # API Cloudflare
-│   └── template_engine.py     # Templates Jinja2
-└── templates/docker-compose/  # Templates serviços
+│   ├── chatwoot_setup.py      # Chatwoot
+│   ├── cleanup_setup.py       # Limpeza
+│   ├── dify_setup.py          # Dify AI
+│   ├── docker_setup.py        # Docker
+│   ├── grafana_setup.py       # Monitoramento
+│   ├── hostname_setup.py      # Hostname
+│   ├── minio_setup.py         # MinIO
+│   ├── n8n_setup.py           # Automação
+│   ├── portainer_setup.py     # Portainer
+│   └── traefik_setup.py       # Traefik
+├── templates/                 # Templates
+│   └── docker-compose/        # Docker Compose
+│       ├── chatwoot.yaml.j2
+│       ├── dify.yaml.j2
+│       ├── grafana.yaml.j2
+│       ├── minio.yaml.j2
+│       ├── n8n.yaml.j2
+│       └── traefik.yaml.j2
+└── utils/                     # Utilitários
+    ├── cloudflare_api.py      # API Cloudflare
+    ├── module_coordinator.py  # Coordenador
+    └── portainer_api.py       # API Portainer
 ```
 
-## FLUXO
-1. main.py → InteractiveMenu
-2. Menu → ModuleCoordinator.execute_module()
-3. Módulo coleta inputs → deploy via PortainerAPI
-4. Cloudflare DNS automático (quando aplicável)
-5. Aguarda serviços online → salva credenciais
+## REGRAS GERAIS
+1. Sempre seguir o padrão de código existente
+2. Documentar todas as funções e classes
+3. Manter compatibilidade com versões anteriores
+4. Testar em ambiente isolado antes de commitar
 
-## INTEGRAÇÃO CLOUDFLARE
-- Utilitário reutilizável: utils/cloudflare_api.py
-- Credenciais persistidas: /root/dados_vps/dados_cloudflare
-- DNS automático para apps com domínios
-- Logs detalhados de requests/responses
+## COMO ADICIONAR NOVA FERRAMENTA/STACK
+
+### 1. ANÁLISE INICIAL
+- Analisar repositório oficial da ferramenta
+- Identificar imagem Docker oficial
+- Mapear variáveis de ambiente necessárias
+- Identificar dependências (banco de dados, volumes, etc.)
+- Verificar portas padrão e configurações de rede
+
+### 2. ESTRUTURA DE ARQUIVOS
+Para adicionar uma nova ferramenta (ex: GOWA), criar:
+
+```
+setup/gowa_setup.py           # Módulo principal
+templates/docker-compose/gowa.yaml.j2  # Template Docker Compose
+```
+
+### 3. PADRÃO DO MÓDULO SETUP
+Cada módulo deve seguir a estrutura:
+
+```python
+#!/usr/bin/env python3
+"""
+Módulo de setup do [FERRAMENTA]
+Baseado na documentação oficial
+Inclui integração com Cloudflare para DNS automático
+"""
+
+import os
+from setup.base_setup import BaseSetup
+from utils.portainer_api import PortainerAPI
+from utils.template_engine import TemplateEngine
+from utils.cloudflare_api import get_cloudflare_api
+
+class [Ferramenta]Setup(BaseSetup):
+    """Setup do [FERRAMENTA] com integração Cloudflare"""
+    
+    def __init__(self):
+        super().__init__("[ferramenta_minuscula]")
+        self.service_name = "[ferramenta_minuscula]"
+        self.portainer_api = PortainerAPI()
+        self.template_engine = TemplateEngine()
+    
+    def validate_prerequisites(self) -> bool:
+        """Valida pré-requisitos para o [FERRAMENTA]"""
+        # Implementar validações específicas
+        return True
+    
+    def setup_dns_records(self) -> bool:
+        """Configura registros DNS via Cloudflare"""
+        # Implementar configuração DNS
+        return True
+    
+    def deploy_service(self) -> bool:
+        """Deploy do serviço via Portainer"""
+        # Implementar deploy usando template
+        return True
+    
+    def run(self) -> bool:
+        """Execução principal do setup"""
+        # Implementar fluxo completo
+        return True
+```
+
+### 4. PADRÃO DO TEMPLATE DOCKER COMPOSE
+Template deve seguir estrutura Jinja2:
+
+```yaml
+version: "3.7"
+services:
+  {{ service_name }}:
+    image: [imagem_oficial]
+    container_name: {{ service_name }}
+    restart: always
+    
+    networks:
+      - {{ network_name }}
+    
+    ports:
+      - "{{ port }}:{{ internal_port }}"
+    
+    environment:
+      # Variáveis comentadas para configuração básica
+      # - VAR1={{ var1 }}
+      # - VAR2={{ var2 }}
+    
+    volumes:
+      - {{ service_name }}_data:/app/data
+    
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.{{ service_name }}.rule=Host(`{{ domain }}`)"
+
+volumes:
+  {{ service_name }}_data:
+
+networks:
+  {{ network_name }}:
+    external: true
+```
+
+### 5. INTEGRAÇÃO NO MODULE_COORDINATOR
+Adicionar import e instância no module_coordinator.py:
+
+```python
+from setup.gowa_setup import GowaSetup
+
+# No método get_available_modules():
+"gowa": GowaSetup(),
+```
+
+### 6. VARIÁVEIS PADRÃO
+Sempre usar variáveis consistentes:
+- `{{ service_name }}` - Nome do serviço
+- `{{ network_name }}` - Nome da rede Docker
+- `{{ domain }}` - Domínio principal
+- `{{ port }}` - Porta externa
+- Comentar variáveis opcionais inicialmente
+
+### 7. TESTES
+- Testar via `python3 main.py`
+- Validar deploy via Portainer
+- Verificar DNS no Cloudflare
+- Confirmar acesso via browser
+
+### 8. DOCUMENTAÇÃO
+- Documentar todas as funções
+- Incluir comentários sobre configurações específicas
+- Manter compatibilidade com padrão existente

@@ -42,12 +42,14 @@ class InteractiveMenu:
         print(f"{self.AMARELO}  [9]{self.BRANCO} MinIO (S3 Compatible Storage){self.RESET}")
         print()
         print(f"{self.VERDE}  APLICAÇÕES:{self.RESET}")
-        print(f"{self.AMARELO} [12]{self.BRANCO} Chatwoot (Customer Support Platform){self.RESET}")
-        print(f"{self.AMARELO} [13]{self.BRANCO} N8N (Workflow Automation + Cloudflare DNS){self.RESET}")
+        print(f"{self.AMARELO} [10]{self.BRANCO} Chatwoot (Customer Support Platform){self.RESET}")
+        print(f"{self.AMARELO} [11]{self.BRANCO} N8N (Workflow Automation + Cloudflare DNS){self.RESET}")
+        print(f"{self.AMARELO} [12]{self.BRANCO} Grafana (Stack de Monitoramento){self.RESET}")
+        print(f"{self.AMARELO} [13]{self.BRANCO} GOWA (WhatsApp API Multi Device){self.RESET}")
         print()
         print(f"{self.VERDE}  UTILITÁRIOS:{self.RESET}")
-        print(f"{self.AMARELO} [10]{self.BRANCO} Instalar Tudo (Básico + Docker + Traefik + Portainer){self.RESET}")
-        print(f"{self.AMARELO} [11]{self.VERMELHO} Limpeza Completa do Ambiente{self.RESET}")
+        print(f"{self.AMARELO} [14]{self.BRANCO} Instalar Tudo (Básico + Docker + Traefik + Portainer){self.RESET}")
+        print(f"{self.AMARELO} [15]{self.VERMELHO} Limpeza Completa do Ambiente{self.RESET}")
         print(f"{self.AMARELO}  [0]{self.BEGE} Sair{self.RESET}")
         print()
         print(f"{self.BRANCO}## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ##{self.RESET}")
@@ -55,7 +57,7 @@ class InteractiveMenu:
     def get_user_choice(self):
         """Obtém a escolha do usuário"""
         try:
-            choice = input(f"{self.AMARELO}Digite sua opção [0-12]: {self.RESET}").strip()
+            choice = input(f"{self.AMARELO}Digite sua opção [0-15]: {self.RESET}").strip()
             return choice
         except KeyboardInterrupt:
             print(f"\n{self.VERMELHO}Operação cancelada pelo usuário.{self.RESET}")
@@ -104,10 +106,26 @@ class InteractiveMenu:
             success = self.coordinator.execute_module('minio')
             
         elif choice == "10":
+            print(f"\n{self.VERDE}Executando instalação do Chatwoot...{self.RESET}")
+            success = self.coordinator.execute_module('chatwoot')
+                
+        elif choice == "11":
+            print(f"\n{self.VERDE}Executando instalação do N8N...{self.RESET}")
+            success = self.coordinator.execute_module('n8n')
+                
+        elif choice == "12":
+            print(f"\n{self.VERDE}Executando instalação do Grafana...{self.RESET}")
+            success = self.coordinator.execute_module('grafana')
+            
+        elif choice == "13":
+            print(f"\n{self.VERDE}Executando instalação do GOWA...{self.RESET}")
+            success = self.coordinator.execute_module('gowa')
+            
+        elif choice == "14":
             print(f"\n{self.VERDE}Executando instalação completa...{self.RESET}")
             success = self.install_full_stack()
             
-        elif choice == "11":
+        elif choice == "15":
             print(f"\n{self.VERMELHO}Executando limpeza completa...{self.RESET}")
             confirm = input(f"{self.VERMELHO}ATENÇÃO: Isso irá remover TODOS os containers, volumes e redes do Docker Swarm. Confirma? (digite 'CONFIRMO'): {self.RESET}")
             if confirm == 'CONFIRMO':
@@ -115,14 +133,6 @@ class InteractiveMenu:
             else:
                 print(f"{self.AMARELO}Limpeza cancelada pelo usuário.{self.RESET}")
                 success = True
-                
-        elif choice == "12":
-            print(f"\n{self.VERDE}Executando instalação do Chatwoot...{self.RESET}")
-            success = self.coordinator.execute_module('chatwoot')
-                
-        elif choice == "13":
-            print(f"\n{self.VERDE}Executando instalação do N8N...{self.RESET}")
-            success = self.coordinator.execute_module('n8n')
                 
         elif choice == "0":
             print(f"\n{self.BEGE}Saindo do menu...{self.RESET}")
