@@ -1,0 +1,289 @@
+#!/bin/bash
+
+## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##
+##                                         LIVCHAT SETUP                                       ##
+## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##
+
+## Cores
+amarelo="\e[33m"
+verde="\e[32m"
+branco="\e[97m"
+bege="\e[93m"
+vermelho="\e[91m"
+azul="\e[34m"
+reset="\e[0m"
+
+## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##
+##                                         LIVCHAT SETUP                                       ##
+## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##
+
+nome_aviso(){
+clear
+echo ""
+echo -e "$azul===================================================================================================$reset"
+echo -e "$azul=                                                                                                 $azul=$reset"
+echo -e "$azul=                     $branco ██╗     ██╗██╗   ██╗ ██████╗██╗  ██╗ █████╗ ████████╗                      $azul=$reset"
+echo -e "$azul=                     $branco ██║     ██║██║   ██║██╔════╝██║  ██║██╔══██╗╚══██╔══╝                      $azul=$reset"
+echo -e "$azul=                     $branco ██║     ██║██║   ██║██║     ███████║███████║   ██║                         $azul=$reset"
+echo -e "$azul=                     $branco ██║     ██║╚██╗ ██╔╝██║     ██╔══██║██╔══██║   ██║                         $azul=$reset"
+echo -e "$azul=                     $branco ███████╗██║ ╚████╔╝ ╚██████╗██║  ██║██║  ██║   ██║                         $azul=$reset"
+echo -e "$azul=                     $branco ╚══════╝╚═╝  ╚═══╝   ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝                         $azul=$reset"
+echo -e "$azul=                                                                                                 $azul=$reset"
+echo -e "$azul===================================================================================================$reset"
+echo ""
+echo ""
+}
+
+nome_iniciando(){
+    clear
+    echo ""
+    echo -e "$azul===================================================================================================$reset"
+    echo -e "$azul=                                                                                                 $azul=$reset"
+    echo -e "$azul=                  $branco ██╗███╗   ██╗██╗ ██████╗██╗ █████╗ ███╗   ██╗██████╗  ██████╗                 $azul=$reset"
+    echo -e "$azul=                  $branco ██║████╗  ██║██║██╔════╝██║██╔══██╗████╗  ██║██╔══██╗██╔═══██╗                $azul=$reset"
+    echo -e "$azul=                  $branco ██║██╔██╗ ██║██║██║     ██║███████║██╔██╗ ██║██║  ██║██║   ██║                $azul=$reset"
+    echo -e "$azul=                  $branco ██║██║╚██╗██║██║██║     ██║██╔══██║██║╚██╗██║██║  ██║██║   ██║                $azul=$reset"
+    echo -e "$azul=                  $branco ██║██║ ╚████║██║╚██████╗██║██║  ██║██║ ╚████║██████╔╝╚██████╔╝                $azul=$reset"
+    echo -e "$azul=                  $branco ╚═╝╚═╝  ╚═══╝╚═╝ ╚═════╝╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝  ╚═════╝                 $azul=$reset"
+    echo -e "$azul=                                              v. 1.0.0                                           $azul=$reset"
+    echo -e "$azul===================================================================================================$reset"
+    echo ""
+    echo ""
+}
+
+nome_verificando(){
+    clear
+    echo ""
+    echo -e "$azul===================================================================================================$reset"
+    echo -e "$azul=                                                                                                 $azul=$reset"
+    echo -e "$azul=       $branco ██╗   ██╗███████╗██████╗ ██╗███████╗██╗ ██████╗ █████╗ ███╗   ██╗██████╗  ██████╗       $azul=$reset"
+    echo -e "$azul=       $branco ██║   ██║██╔════╝██╔══██╗██║██╔════╝██║██╔════╝██╔══██╗████╗  ██║██╔══██╗██╔═══██╗      $azul=$reset"
+    echo -e "$azul=       $branco ██║   ██║█████╗  ██████╔╝██║█████╗  ██║██║     ███████║██╔██╗ ██║██║  ██║██║   ██║      $azul=$reset"
+    echo -e "$azul=       $branco ╚██╗ ██╔╝██╔══╝  ██╔══██╗██║██╔══╝  ██║██║     ██╔══██║██║╚██╗██║██║  ██║██║   ██║      $azul=$reset"
+    echo -e "$azul=       $branco  ╚████╔╝ ███████╗██║  ██║██║██║     ██║╚██████╗██║  ██║██║ ╚████║██████╔╝╚██████╔╝      $azul=$reset"
+    echo -e "$azul=       $branco   ╚═══╝  ╚══════╝╚═╝  ╚═╝╚═╝╚═╝     ╚═╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝  ╚═════╝       $azul=$reset"
+    echo -e "$azul=                                                                                                 $azul=$reset"
+    echo -e "$azul===================================================================================================$reset"
+    echo ""
+    echo ""
+}
+
+## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##
+##                                         LIVCHAT SETUP                                       ##
+## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##
+
+desc_ver(){
+echo -e "                            Este script recomenda o uso do$verde Ubuntu 20.04/22.04$branco ou$verde Debian 11/12$branco.$reset"
+echo ""
+} 
+
+## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##
+##                                         LIVCHAT SETUP                                       ##
+## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##
+
+clear
+nome_verificando
+echo "Aguarde enquanto verificamos algumas informações."
+sleep 1
+
+# Verifica se está usando uma distribuição suportada
+if ! grep -qE 'PRETTY_NAME="(Ubuntu (20|22)\.|Debian GNU/Linux (11|12))' /etc/os-release; then
+    nome_aviso
+    desc_ver
+    sleep 5
+    clear
+    nome_verificando
+fi
+
+# Verifica se o usuário é root
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Este script precisa ser executado como root. Executando sudo su..."
+    sudo su
+fi
+
+# Verifica se o usuário está no diretório /root/
+if [ "$PWD" != "/root" ]; then
+    echo "Mudando para o diretório /root/"
+    cd /root || exit
+fi
+
+## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##
+##                                         LIVCHAT SETUP                                       ##
+## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##
+
+nome_iniciando 
+
+## Fazendo update
+sudo apt update > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "1/15 - [ OK ] - Fazendo Update"
+else
+    echo "1/15 - [ OFF ] - Fazendo Update"
+fi
+
+echo ""
+
+## Fazendo upgrade
+sudo apt upgrade -y > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "2/15 - [ OK ] - Fazendo Upgrade"
+else
+    echo "2/15 - [ OFF ] - Fazendo Upgrade"
+fi
+
+echo ""
+
+## Instalando Sudo
+apt install sudo -y > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "3/15 - [ OK ] - Verificando/Instalando sudo"
+else
+    echo "3/15 - [ OFF ] - Verificando/Instalando sudo"
+fi
+
+echo ""
+
+## Instalando curl
+sudo apt install curl -y > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "4/15 - [ OK ] - Verificando/Instalando curl"
+else
+    echo "4/15 - [ OFF ] - Verificando/Instalando curl"
+fi
+
+echo ""
+
+## Instalando wget
+sudo apt install wget -y > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "5/15 - [ OK ] - Verificando/Instalando wget"
+else
+    echo "5/15 - [ OFF ] - Verificando/Instalando wget"
+fi
+
+echo ""
+
+## Instalando git
+apt install git -y > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "6/15 - [ OK ] - Verificando/Instalando Git"
+else
+    echo "6/15 - [ OFF ] - Verificando/Instalando Git"
+fi
+
+echo ""
+
+## Instalando python3
+apt install python3 -y > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "7/15 - [ OK ] - Verificando/Instalando Python3"
+else
+    echo "7/15 - [ OFF ] - Verificando/Instalando Python3"
+fi
+
+echo ""
+
+## Instalando python3-pip
+apt install python3-pip -y > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "8/15 - [ OK ] - Verificando/Instalando Python3-pip"
+else
+    echo "8/15 - [ OFF ] - Verificando/Instalando Python3-pip"
+fi
+
+echo ""
+
+## Instalando python3-venv
+apt install python3-venv -y > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "9/15 - [ OK ] - Verificando/Instalando Python3-venv"
+else
+    echo "9/15 - [ OFF ] - Verificando/Instalando Python3-venv"
+fi
+
+echo ""
+
+## Instalando unzip
+apt install unzip -y > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "10/15 - [ OK ] - Verificando/Instalando unzip"
+else
+    echo "10/15 - [ OFF ] - Verificando/Instalando unzip"
+fi
+
+echo ""
+
+## Instalando jq
+sudo apt install jq -y > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "11/15 - [ OK ] - Verificando/Instalando jq"
+else
+    echo "11/15 - [ OFF ] - Verificando/Instalando jq"
+fi
+
+echo ""
+
+## Instalando apache2-utils
+sudo apt install apache2-utils -y > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "12/15 - [ OK ] - Verificando/Instalando apache2-utils"
+else
+    echo "12/15 - [ OFF ] - Verificando/Instalando apache2-utils"
+fi
+
+echo ""
+
+## Fazendo update final
+sudo apt update > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "13/15 - [ OK ] - Update final"
+else
+    echo "13/15 - [ OFF ] - Update final"
+fi
+
+echo ""
+
+# Verifica se o diretório LivChatSetup já existe
+if [ -d "LivChatSetup" ]; then
+    echo ""
+    rm -rf LivChatSetup
+fi
+
+# Clona o repositório
+git clone https://github.com/pedrohnas0/LivChatSetup.git > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "14/15 - [ OK ] - Clonando repositório LivChatSetup"
+else
+    echo "14/15 - [ OFF ] - Clonando repositório LivChatSetup"
+    echo "Erro ao clonar o repositório. Verifique sua conexão com a internet."
+    exit 1
+fi
+
+echo ""
+
+# Entra no diretório e instala dependências
+cd LivChatSetup
+pip3 install -r requirements.txt > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "15/15 - [ OK ] - Instalando dependências Python"
+else
+    echo "15/15 - [ OFF ] - Instalando dependências Python"
+fi
+
+echo ""
+echo ""
+echo -e "$verde===================================================================================================$reset"
+echo -e "$verde=                                                                                                 $verde=$reset"
+echo -e "$verde=                           $branco✅ INSTALAÇÃO CONCLUÍDA COM SUCESSO! ✅$verde                           =$reset"
+echo -e "$verde=                                                                                                 $verde=$reset"
+echo -e "$verde=                              $branco Para iniciar o LivChat Setup, execute:$verde                        =$reset"
+echo -e "$verde=                                                                                                 $verde=$reset"
+echo -e "$verde=                                    $amarelo cd /root/LivChatSetup$verde                                    =$reset"
+echo -e "$verde=                                    $amarelo python3 main.py$verde                                         =$reset"
+echo -e "$verde=                                                                                                 $verde=$reset"
+echo -e "$verde===================================================================================================$reset"
+echo ""
+
+## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##
+##                                         LIVCHAT SETUP                                       ##
+## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##
