@@ -26,6 +26,7 @@ from setup.chatwoot_setup import ChatwootSetup
 from setup.n8n_setup import N8NSetup
 from setup.grafana_setup import GrafanaSetup
 from setup.gowa_setup import GowaSetup
+from setup.livchatbridge_setup import LivChatBridgeSetup
 
 class ModuleCoordinator:
     """Coordenador simplificado dos módulos de setup"""
@@ -121,6 +122,10 @@ class ModuleCoordinator:
                 gowa_setup = GowaSetup()
                 return gowa_setup.run()
             
+            elif module_name == 'livchatbridge':
+                livchatbridge_setup = LivChatBridgeSetup()
+                return livchatbridge_setup.run_setup()
+            
             elif module_name == 'cleanup':
                 cleanup_setup = CleanupSetup()
                 return cleanup_setup.run()
@@ -203,6 +208,26 @@ class ModuleCoordinator:
         chatwoot_setup = ChatwootSetup()
         return chatwoot_setup.run()
     
+    def run_n8n_setup(self) -> bool:
+        """Executa setup do N8N"""
+        n8n_setup = N8NSetup()
+        return n8n_setup.run()
+    
+    def run_grafana_setup(self) -> bool:
+        """Executa setup do Grafana"""
+        grafana_setup = GrafanaSetup()
+        return grafana_setup.run()
+    
+    def run_gowa_setup(self) -> bool:
+        """Executa setup do GOWA"""
+        gowa_setup = GowaSetup()
+        return gowa_setup.run_setup()
+    
+    def run_livchatbridge_setup(self) -> bool:
+        """Executa setup do LivChatBridge"""
+        livchatbridge_setup = LivChatBridgeSetup()
+        return livchatbridge_setup.run_setup()
+    
     def run_cleanup_setup(self) -> bool:
         """Executa limpeza completa"""
         # Confirmação de segurança
@@ -239,6 +264,10 @@ class ModuleCoordinator:
             'pgvector': ('PostgreSQL + PgVector', lambda: self.run_pgvector_setup()),
             'minio': ('MinIO (S3)', lambda: self.run_minio_setup()),
             'chatwoot': ('Chatwoot', lambda: self.run_chatwoot_setup()),
+            'n8n': ('N8N', lambda: self.run_n8n_setup()),
+            'grafana': ('Grafana', lambda: self.run_grafana_setup()),
+            'gowa': ('GOWA', lambda: self.run_gowa_setup()),
+            'livchatbridge': ('LivChatBridge', lambda: self.run_livchatbridge_setup()),
             'cleanup': ('Limpeza', lambda: self.run_cleanup_setup())
         }
     

@@ -526,8 +526,18 @@ class PortainerAPI:
                     return False
             
             # 2. Renderizar template
+            self.logger.debug(f"🔧 Iniciando renderização do template: {template_path}")
+            self.logger.debug(f"🔧 Variáveis do template: {template_vars}")
+            
             template_engine = TemplateEngine()
             rendered_content = template_engine.render_template(template_path, template_vars)
+            
+            if not rendered_content:
+                self.logger.error(f"❌ Falha na renderização do template: {template_path}")
+                self.logger.error(f"❌ Template engine retornou conteúdo vazio")
+                return False
+            
+            self.logger.debug(f"✅ Template renderizado com sucesso. Tamanho: {len(rendered_content)} chars")
             
             # 3. Salvar stack temporária
             stack_path = f"/tmp/{service_name}_stack.yaml"

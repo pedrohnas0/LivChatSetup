@@ -1,0 +1,64 @@
+version: "3.7"
+services:
+
+## --------------------------- LIVCHATBRIDGE --------------------------- ##
+
+  {{ service_name }}:
+    image: ghcr.io/pedrohnas0/livchatbridge:latest ## Imagem Docker do LivChatBridge
+    container_name: {{ service_name }}
+    restart: always
+    
+    networks:
+      - {{ network_name }} ## Nome da rede interna
+    
+    # Sem exposição direta de porta - acesso apenas via Traefik/HTTPS
+    
+    environment:
+      ## 🔧 Configurações Básicas
+      - CHATWOOT_BASE_URL={{ chatwoot_base_url }}
+      - GOWA_BASE_URL={{ gowa_base_url }}
+      - BRIDGE_BASE_URL={{ bridge_base_url }}
+      
+      ## 🔐 Autenticação e Tokens
+      - CHATWOOT_TOKEN={{ chatwoot_token }}
+      - GOWA_AUTH={{ gowa_auth }}
+      - WEBHOOK_SECRET={{ webhook_secret }}
+      
+      ## 🗄️ PostgreSQL Database
+      - POSTGRES_HOST={{ postgres_host }}
+      - POSTGRES_USERNAME={{ postgres_username }}
+      - POSTGRES_PASSWORD={{ postgres_password }}
+      - POSTGRES_DATABASE={{ postgres_database }}
+      - POSTGRES_PORT={{ postgres_port }}
+    
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    
+    labels:
+      ## 🌐 Traefik - Proxy Reverso
+      - "traefik.enable=true"
+      - "traefik.docker.network={{ network_name }}"
+      
+      ## 📍 Roteamento HTTP
+      - "traefik.http.routers.{{ service_name }}.rule=Host(`{{ domain }}`)"
+      - "traefik.http.routers.{{ service_name }}.entrypoints=websecure"
+      - "traefik.http.routers.{{ service_name }}.tls.certresolver=letsencryptresolver"
+      
+      ## 🎯 Serviço
+      - "traefik.http.services.{{ service_name }}.loadbalancer.server.port=5000"
+      
+      ## 🔒 Headers de Segurança
+      - "traefik.http.middlewares.{{ service_name }}-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.routers.{{ service_name }}.middlewares={{ service_name }}-headers"
+
+## --------------------------- REDE --------------------------- ##
+networks:
+  {{ network_name }}:
+    external: true

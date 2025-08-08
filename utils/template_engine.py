@@ -11,7 +11,7 @@ from jinja2 import Environment, FileSystemLoader, Template
 class TemplateEngine:
     """Engine para processar templates Jinja2"""
     
-    def __init__(self, templates_dir: str = "/root/CascadeProjects/templates"):
+    def __init__(self, templates_dir: str = "/root/CascadeProjects/LivChatSetup/templates"):
         self.templates_dir = templates_dir
         self.logger = logging.getLogger(__name__)
         
@@ -34,15 +34,30 @@ class TemplateEngine:
             String com o template renderizado
         """
         try:
+            self.logger.debug(f"🔧 Tentando renderizar template: {template_path}")
+            self.logger.debug(f"🔧 Diretório de templates: {self.templates_dir}")
+            self.logger.debug(f"🔧 Template path completo: {os.path.join(self.templates_dir, template_path)}")
+            
+            # Verificar se o arquivo existe
+            full_path = os.path.join(self.templates_dir, template_path)
+            if not os.path.exists(full_path):
+                self.logger.error(f"❌ Template não encontrado: {full_path}")
+                return ""
+            
+            self.logger.debug(f"✅ Template encontrado: {full_path}")
+            
             template = self.env.get_template(template_path)
             rendered = template.render(**variables)
             
-            self.logger.debug(f"Template {template_path} renderizado com sucesso")
+            self.logger.debug(f"✅ Template {template_path} renderizado com sucesso. Tamanho: {len(rendered)} chars")
             return rendered
             
         except Exception as e:
-            self.logger.error(f"Erro ao renderizar template {template_path}: {e}")
-            raise
+            self.logger.error(f"❌ Erro ao renderizar template {template_path}: {e}")
+            self.logger.error(f"❌ Tipo do erro: {type(e).__name__}")
+            import traceback
+            self.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+            return ""
     
     def render_to_file(self, template_path: str, variables: Dict[str, Any], output_path: str) -> bool:
         """
