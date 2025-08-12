@@ -129,9 +129,9 @@ class GrafanaSetup(BaseSetup):
                 domain = user_data[domain_key]
                 self.logger.info(f"🔧 Configurando DNS para {service_name}: {domain}")
                 
-                success = cloudflare_api.create_cname_record(
-                    domain, 
-                    "ptn.dev.livchat.ai"
+                success = cloudflare_api.setup_dns_for_service(
+                    service_name=service_name,
+                    domains=[domain]
                 )
                 
                 if success:

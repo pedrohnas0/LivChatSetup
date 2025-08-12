@@ -318,17 +318,45 @@ class CloudflareAPI:
             self.logger.info(f"🔧 Criando novo registro: {name} -> {target}")
             return self.create_cname_record(name, target)
     
-    def setup_dns_for_service(self, service_name, domains, target_domain="ptn.dev.livchat.ai"):
-        """Configura DNS para um serviço específico"""
+    def _get_portainer_cname_target(self):
+        """Obtém o host do Portainer salvo em /root/dados_vps/dados_portainer para usar como alvo CNAME."""
+        try:
+            creds_path = "/root/dados_vps/dados_portainer"
+            if not os.path.exists(creds_path):
+                return None
+            with open(creds_path, 'r') as f:
+                for line in f:
+                    if line.startswith('Dominio do portainer:'):
+                        val = line.split(':', 1)[1].strip()
+                        # Remove esquema e path, mantendo apenas o host
+                        val = val.replace('https://', '').replace('http://', '')
+                        if '/' in val:
+                            val = val.split('/', 1)[0]
+                        return val if val else None
+        except Exception:
+            return None
+        return None
+
+    def setup_dns_for_service(self, service_name, domains, target_domain=None):
+        """Configura DNS para um serviço específico.
+        Se target_domain não for informado, utiliza o domínio do Portainer salvo (mesmo alvo para todas as stacks).
+        """
         self.logger.info(f"🌐 Configurando DNS para {service_name}")
         
         if not self.zone_id and not self.get_zone_id():
             self.logger.error("❌ Falha ao obter Zone ID")
             return False
         
+        # Determina o alvo dinamicamente, se não informado
+        if not target_domain:
+            target_domain = self._get_portainer_cname_target()
+            if not target_domain:
+                self.logger.error("❌ Alvo CNAME não definido e não foi possível obter o domínio do Portainer. Configure o Portainer primeiro.")
+                return False
+        
         success = True
         for domain in domains:
-            self.logger.info(f"🔧 Processando domínio: {domain}")
+            self.logger.info(f"🔧 Processando domínio: {domain} -> {target_domain}")
             if not self.ensure_cname_record(domain, target_domain):
                 self.logger.error(f"❌ Falha ao configurar DNS para {domain}")
                 success = False

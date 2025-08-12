@@ -55,7 +55,7 @@ class PortainerAPI:
             print("="*80)
             print("\nPara fazer deploy das stacks via API do Portainer, precisamos das credenciais.")
             print("\nPasso 1/3")
-            portainer_url = input("Digite a URL do Portainer (ex: ptn.dev.livchat.ai): ").strip()
+            portainer_url = input("Digite a URL do Portainer (ex: ptn.seudominio.com): ").strip()
             
             print("\nPasso 2/3")
             username = input("Digite seu Usuário (ex: admin): ").strip()

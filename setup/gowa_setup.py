@@ -69,10 +69,8 @@ class GowaSetup(BaseSetup):
                 self.logger.error("❌ API Cloudflare não configurada")
                 return False
             
-            # Cria registro CNAME
-            # Target padrão para o ambiente (pode ser configurado conforme necessário)
-            target = "ptn.dev.livchat.ai"  # Target padrão do ambiente
-            success = cloudflare_api.create_cname_record(domain, target)
+            # Cria registro CNAME apontando para o mesmo host do Portainer (alvo dinâmico)
+            success = cloudflare_api.setup_dns_for_service("GOWA", [domain])
             if not success:
                 self.logger.error(f"❌ Falha ao criar registro DNS para {domain}")
                 return False

@@ -239,54 +239,96 @@ class ModuleCoordinator:
                 return docker_setup.run()
             
             elif module_name == 'traefik':
+                # Garante network_name e passa email
+                if not self.ensure_network_name():
+                    self.logger.warning("Nome da rede não definido. Pulando instalação do Traefik.")
+                    return True
                 # Email será solicitado pelo próprio módulo se não fornecido
-                traefik_setup = TraefikSetup(kwargs.get('email') or self.args.email)
+                traefik_setup = TraefikSetup(
+                    email=kwargs.get('email') or self.args.email,
+                    network_name=self.args.network_name
+                )
                 return traefik_setup.run()
             
             elif module_name == 'portainer':
-                # Domínio será solicitado pelo próprio módulo se não fornecido
-                portainer_setup = PortainerSetup(kwargs.get('portainer_domain') or self.args.portainer_domain)
+                # Garante network_name; domínio será solicitado se não fornecido
+                if not self.ensure_network_name():
+                    self.logger.warning("Nome da rede não definido. Pulando instalação do Portainer.")
+                    return True
+                portainer_setup = PortainerSetup(
+                    kwargs.get('portainer_domain') or self.args.portainer_domain,
+                    network_name=self.args.network_name
+                )
                 return portainer_setup.run()
             
             elif module_name == 'redis':
-                redis_setup = RedisSetup()
+                if not self.ensure_network_name():
+                    self.logger.warning("Nome da rede não definido. Pulando instalação do Redis.")
+                    return True
+                redis_setup = RedisSetup(network_name=self.args.network_name)
                 return redis_setup.run()
             
             elif module_name == 'postgres':
-                postgres_setup = PostgresSetup()
+                if not self.ensure_network_name():
+                    self.logger.warning("Nome da rede não definido. Pulando instalação do PostgreSQL.")
+                    return True
+                postgres_setup = PostgresSetup(network_name=self.args.network_name)
                 return postgres_setup.run()
             
             elif module_name == 'pgvector':
-                pgvector_setup = PgVectorSetup()
+                if not self.ensure_network_name():
+                    self.logger.warning("Nome da rede não definido. Pulando instalação do PgVector.")
+                    return True
+                pgvector_setup = PgVectorSetup(network_name=self.args.network_name)
                 return pgvector_setup.run()
             
             elif module_name == 'minio':
-                # MinIO já solicita domínios internamente
-                minio_setup = MinioSetup()
+                if not self.ensure_network_name():
+                    self.logger.warning("Nome da rede não definido. Pulando instalação do MinIO.")
+                    return True
+                minio_setup = MinioSetup(network_name=self.args.network_name)
                 return minio_setup.run()
             
             elif module_name == 'chatwoot':
-                chatwoot_setup = ChatwootSetup()
+                if not self.ensure_network_name():
+                    self.logger.warning("Nome da rede não definido. Pulando instalação do Chatwoot.")
+                    return True
+                chatwoot_setup = ChatwootSetup(network_name=self.args.network_name)
                 return chatwoot_setup.run()
             
             elif module_name == 'directus':
-                directus_setup = DirectusSetup()
+                if not self.ensure_network_name():
+                    self.logger.warning("Nome da rede não definido. Pulando instalação do Directus.")
+                    return True
+                directus_setup = DirectusSetup(network_name=self.args.network_name)
                 return directus_setup.run()
             
             elif module_name == 'n8n':
-                n8n_setup = N8NSetup()
-                return n8n_setup.install()
+                if not self.ensure_network_name():
+                    self.logger.warning("Nome da rede não definido. Pulando instalação do N8N.")
+                    return True
+                n8n_setup = N8NSetup(network_name=self.args.network_name)
+                return n8n_setup.run()
             
             elif module_name == 'grafana':
-                grafana_setup = GrafanaSetup()
+                if not self.ensure_network_name():
+                    self.logger.warning("Nome da rede não definido. Pulando instalação do Grafana.")
+                    return True
+                grafana_setup = GrafanaSetup(network_name=self.args.network_name)
                 return grafana_setup.run()
             
             elif module_name == 'gowa':
-                gowa_setup = GowaSetup()
+                if not self.ensure_network_name():
+                    self.logger.warning("Nome da rede não definido. Pulando instalação do GOWA.")
+                    return True
+                gowa_setup = GowaSetup(network_name=self.args.network_name)
                 return gowa_setup.run()
             
             elif module_name == 'livchatbridge':
-                livchatbridge_setup = LivChatBridgeSetup()
+                if not self.ensure_network_name():
+                    self.logger.warning("Nome da rede não definido. Pulando instalação do LivChatBridge.")
+                    return True
+                livchatbridge_setup = LivChatBridgeSetup(network_name=self.args.network_name)
                 return livchatbridge_setup.run_setup()
             
             elif module_name == 'cleanup':
@@ -455,7 +497,7 @@ class ModuleCoordinator:
             self.logger.warning("Nome da rede não definido. Pulando instalação do GOWA.")
             return True
         gowa_setup = GowaSetup(network_name=self.args.network_name)
-        return gowa_setup.run_setup()
+        return gowa_setup.run()
     
     def run_livchatbridge_setup(self) -> bool:
         """Executa setup do LivChatBridge"""
