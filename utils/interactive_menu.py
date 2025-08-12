@@ -43,14 +43,15 @@ class InteractiveMenu:
         print()
         print(f"{self.VERDE}  APLICAÇÕES:{self.RESET}")
         print(f"{self.AMARELO} [10]{self.BRANCO} Chatwoot (Customer Support Platform){self.RESET}")
-        print(f"{self.AMARELO} [11]{self.BRANCO} N8N (Workflow Automation + Cloudflare DNS){self.RESET}")
-        print(f"{self.AMARELO} [12]{self.BRANCO} Grafana (Stack de Monitoramento){self.RESET}")
-        print(f"{self.AMARELO} [13]{self.BRANCO} GOWA (WhatsApp API Multi Device){self.RESET}")
-        print(f"{self.AMARELO} [14]{self.BRANCO} LivChatBridge (Webhook Connector Chatwoot-GOWA){self.RESET}")
+        print(f"{self.AMARELO} [11]{self.BRANCO} Directus (Headless CMS + Cloudflare DNS){self.RESET}")
+        print(f"{self.AMARELO} [12]{self.BRANCO} N8N (Workflow Automation + Cloudflare DNS){self.RESET}")
+        print(f"{self.AMARELO} [13]{self.BRANCO} Grafana (Stack de Monitoramento){self.RESET}")
+        print(f"{self.AMARELO} [14]{self.BRANCO} GOWA (WhatsApp API Multi Device){self.RESET}")
+        print(f"{self.AMARELO} [15]{self.BRANCO} LivChatBridge (Webhook Connector Chatwoot-GOWA){self.RESET}")
         print()
         print(f"{self.VERDE}  UTILITÁRIOS:{self.RESET}")
-        print(f"{self.AMARELO} [15]{self.BRANCO} Instalar Tudo (Básico + Docker + Traefik + Portainer){self.RESET}")
-        print(f"{self.AMARELO} [16]{self.VERMELHO} Limpeza Completa do Ambiente{self.RESET}")
+        print(f"{self.AMARELO} [16]{self.BRANCO} Instalar Tudo (Básico + Docker + Traefik + Portainer){self.RESET}")
+        print(f"{self.AMARELO} [17]{self.VERMELHO} Limpeza Completa do Ambiente{self.RESET}")
         print(f"{self.AMARELO}  [0]{self.BEGE} Sair{self.RESET}")
         print()
         print(f"{self.BRANCO}## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ## // ##{self.RESET}")
@@ -58,7 +59,7 @@ class InteractiveMenu:
     def get_user_choice(self):
         """Obtém a escolha do usuário"""
         try:
-            choice = input(f"{self.AMARELO}Digite sua opção [0-16]: {self.RESET}").strip()
+            choice = input(f"{self.AMARELO}Digite sua opção [0-17]: {self.RESET}").strip()
             return choice
         except KeyboardInterrupt:
             print(f"\n{self.VERMELHO}Operação cancelada pelo usuário.{self.RESET}")
@@ -111,26 +112,30 @@ class InteractiveMenu:
             success = self.coordinator.execute_module('chatwoot')
                 
         elif choice == "11":
+            print(f"\n{self.VERDE}Executando instalação do Directus...{self.RESET}")
+            success = self.coordinator.execute_module('directus')
+                
+        elif choice == "12":
             print(f"\n{self.VERDE}Executando instalação do N8N...{self.RESET}")
             success = self.coordinator.execute_module('n8n')
                 
-        elif choice == "12":
+        elif choice == "13":
             print(f"\n{self.VERDE}Executando instalação do Grafana...{self.RESET}")
             success = self.coordinator.execute_module('grafana')
             
-        elif choice == "13":
+        elif choice == "14":
             print(f"\n{self.VERDE}Executando instalação do GOWA...{self.RESET}")
             success = self.coordinator.execute_module('gowa')
             
-        elif choice == "14":
+        elif choice == "15":
             print(f"\n{self.VERDE}Executando instalação do LivChatBridge...{self.RESET}")
             success = self.coordinator.execute_module('livchatbridge')
             
-        elif choice == "15":
+        elif choice == "16":
             print(f"\n{self.VERDE}Executando instalação completa...{self.RESET}")
             success = self.install_full_stack()
             
-        elif choice == "16":
+        elif choice == "17":
             print(f"\n{self.VERMELHO}Executando limpeza completa...{self.RESET}")
             confirm = input(f"{self.VERMELHO}ATENÇÃO: Isso irá remover TODOS os containers, volumes e redes do Docker Swarm. Confirma? (digite 'CONFIRMO'): {self.RESET}")
             if confirm == 'CONFIRMO':

@@ -1,0 +1,80 @@
+version: "3.7"
+services:
+
+  ## --------------------------- DIRECTUS --------------------------- ##
+  directus_app:
+    image: directus/directus:latest
+
+    networks:
+      - {{ network_name }}
+
+    environment:
+      ## 🔐 Chaves e Admin
+      - KEY={{ encryption_key }}
+      - SECRET={{ encryption_key }}
+      - ADMIN_EMAIL={{ admin_email }}
+      - ADMIN_PASSWORD={{ admin_password }}
+
+      ## 🗄️ Banco de Dados (PgVector/PostgreSQL compartilhado)
+      - DB_CLIENT=pg
+      - DB_HOST=pgvector
+      - DB_PORT=5432
+      - DB_DATABASE=chatwoot
+      - DB_USER=postgres
+      - DB_PASSWORD={{ pgvector_password }}
+
+      ## 🌐 URL pública
+      - PUBLIC_URL=https://{{ domain }}
+
+      ## 📦 Armazenamento local
+      - STORAGE_LOCATIONS=local
+      - STORAGE_LOCAL_DRIVER=local
+      - STORAGE_LOCAL_ROOT=/directus/uploads
+
+      ## ⚙️ Configurações adicionais
+      - LOG_LEVEL=info
+      - WEBSOCKETS_ENABLED=true
+      - CORS_ENABLED=true
+      - CORS_ORIGIN=*
+
+      ## Fuso horário
+      - TZ=America/Sao_Paulo
+
+    volumes:
+      - directus_uploads:/directus/uploads
+      - directus_extensions:/directus/extensions
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1024M
+      labels:
+        - traefik.enable=true
+        - traefik.http.routers.directus.rule=Host(`{{ domain }}`)
+        - traefik.http.routers.directus.entrypoints=websecure
+        - traefik.http.routers.directus.tls.certresolver=letsencryptresolver
+        - traefik.http.routers.directus.priority=1
+        - traefik.http.routers.directus.service=directus
+        - traefik.http.services.directus.loadbalancer.server.port=8055
+        - traefik.http.services.directus.loadbalancer.passHostHeader=true
+        - traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto=https
+        - traefik.http.routers.directus.middlewares=sslheader
+
+## --------------------------- VOLUMES / NETWORK --------------------------- ##
+volumes:
+  directus_uploads:
+    external: true
+    name: directus_uploads
+  directus_extensions:
+    external: true
+    name: directus_extensions
+
+networks:
+  {{ network_name }}:
+    external: true
