@@ -3,17 +3,16 @@
 ## Visão Geral
 Sistema modular de setup inicial para servidores Linux, baseado no script original SetupOrionOriginal.sh, mas refatorado em Python com arquitetura modular, menu interativo e deploy via API do Portainer.
 
-**Versão Atual**: 2.0 - Janeiro 2025
-**Status**: Produção (Chatwoot funcional)
+**Status**: Produção (Chatwoot e Directus funcionais)
 
 ## Nova Estrutura de Arquivos (Organizada)
 
 ```
-/root/CascadeProjects/
+/root/CascadeProjects/LivChatSetup/
 ├── ARQUITETURA.md              # Este arquivo
 ├── README.md                   # Documentação principal
-├── main.py                     # Ponto de entrada (sempre menu)
-├── config.py                   # Configurações globais
+├── main.py                     # Ponto de entrada (menu)
+├── config.py                   # Configurações / logging
 ├── requirements.txt            # Dependências Python
 ├── setup/                      # Módulos de setup
 │   ├── base_setup.py           # Classe base
@@ -23,31 +22,35 @@ Sistema modular de setup inicial para servidores Linux, baseado no script origin
 │   ├── traefik_setup.py        # Instalação do Traefik
 │   ├── portainer_setup.py      # Instalação do Portainer
 │   ├── redis_setup.py          # Redis com persistência
-│   ├── postgres_setup.py       # PostgreSQL + PgVector
+│   ├── postgres_setup.py       # PostgreSQL
+│   ├── pgvector_setup.py       # PgVector
 │   ├── minio_setup.py          # MinIO (S3 compatível)
 │   ├── chatwoot_setup.py       # Chatwoot (Customer Support)
-│   └── directus_setup.py       # Directus (Headless CMS)
+│   ├── directus_setup.py       # Directus (Headless CMS)
+│   ├── n8n_setup.py            # N8N (Automação)
+│   ├── grafana_setup.py        # Grafana (Monitoramento)
+│   ├── gowa_setup.py           # GOWA (WhatsApp API)
+│   └── livchatbridge_setup.py  # Conector Chatwoot-GOWA
 ├── templates/                  # Templates de configuração
-│   └── docker-compose/         # Stacks Docker Compose
+│   └── docker-compose/         # Stacks Docker Compose (Jinja2)
 │       ├── traefik.yaml.j2     # Template do Traefik
 │       ├── portainer.yaml.j2   # Template do Portainer
 │       ├── redis.yaml.j2       # Template do Redis
 │       ├── postgres.yaml.j2    # Template do PostgreSQL
+│       ├── pgvector.yaml.j2    # Template do PgVector
 │       ├── minio.yaml.j2       # Template do MinIO
 │       ├── chatwoot.yaml.j2    # Template do Chatwoot
-│       └── directus.yaml.j2    # Template do Directus
+│       ├── directus.yaml.j2    # Template do Directus
+│       ├── grafana.yaml.j2     # Template do Grafana
+│       ├── gowa.yaml.j2        # Template do GOWA
+│       └── livchatbridge.yaml.j2 # Template do LivChatBridge
 └── utils/                      # Utilitários
     ├── interactive_menu.py     # Menu interativo principal
     ├── module_coordinator.py   # Coordenador de módulos
     ├── portainer_api.py        # API do Portainer
-    └── template_engine.py      # Engine para processar templates
+    ├── template_engine.py      # Engine para processar templates
+    └── cloudflare_api.py       # Integração com Cloudflare (DNS)
 ```
-
-**Benefícios da nova estrutura:**
-- **Separação clara**: Módulos, templates e utilitários organizados
-- **Templates externos**: Stacks Docker em arquivos .j2 (Jinja2)
-- **Escalabilidade**: Fácil adição de novos módulos e templates
-- **Manutenibilidade**: Cada componente tem seu lugar específico
 
 ## Módulos Implementados
 
@@ -71,39 +74,10 @@ Sistema modular de setup inicial para servidores Linux, baseado no script origin
 
 ### 4. Utilitários (utils/)
 - **template_engine.py**: Processamento de templates Jinja2
-- **validators.py**: Validação de entradas e pré-requisitos
-- **helpers.py**: Funções auxiliares reutilizáveis
-
-### 3. Regras de Logging Estabelecidas
-- **NUNCA** usar separadores como '=================================================='
-- **NUNCA** usar emojis nos logs (✓, ✗, etc.)
-- Todas as informações devem estar na mesma linha
-- Formato: `HH:MM:SS.mmm | LEVEL | message`
-- Níveis centralizados em 8 caracteres
-- Logs limpos e funcionais
-
-## Padrões de Design
-
-### 1. Logging Estruturado
-- Formato: `HH:MM:SS.mmm | LEVEL | message`
-- Níveis centralizados em 8 caracteres
-- Cores no console, texto puro no arquivo
-- Rotação de logs automática
-
-### 2. Modularidade
-- Cada módulo herda de `BaseSetup`
-- Interface consistente: `run()`, `validate()`, `cleanup()`
-- Dependências explícitas entre módulos
-
-### 3. Tratamento de Erros
-- Logs detalhados de comandos
-- Timeout configurável
-- Rollback em caso de falha
-
-### 4. Configuração
-- Arquivo de configuração centralizado
-- Variáveis de ambiente
-- Validação de configurações
+- **module_coordinator.py**: Mapa e execução de módulos
+- **interactive_menu.py**: Interface de menu interativo
+- **portainer_api.py**: Deploy e orquestração via API do Portainer
+- **cloudflare_api.py**: Automação de DNS (opcional)
 
 ## Fluxo de Execução
 
@@ -113,14 +87,15 @@ Sistema modular de setup inicial para servidores Linux, baseado no script origin
    - Valida privilégios
 
 2. **Execução Sequencial**
-   - Basic Setup (já implementado)
+   - Basic Setup
    - Hostname Setup
-   - Docker Setup
-   - Network Setup
+   - Docker Setup + Swarm
+   - Traefik (SSL/Proxy)
+   - Portainer (Gerenciador)
 
 3. **Finalização**
    - Relatório de status
-   - Limpeza de recursos
+   - Instalação de aplicações via menu
    - Próximos passos
 
 ## Status das Implementações
@@ -140,12 +115,13 @@ Sistema modular de setup inicial para servidores Linux, baseado no script origin
 - [x] MinIO Setup (minio_setup.py)
 - [x] Deploy via API do Portainer
 
-### Aplicações (Em Produção)
-- [x] Chatwoot Setup (chatwoot_setup.py) - **FUNCIONAL**
-- [x] Directus Setup (directus_setup.py) - **FUNCIONAL**
-- [ ] N8N Setup (n8n_setup.py)
-- [ ] Typebot Setup (typebot_setup.py)
-- [ ] Evolution API Setup (evolution_setup.py)
+### Aplicações
+- [x] Chatwoot Setup (chatwoot_setup.py) — funcional
+- [x] Directus Setup (directus_setup.py) — funcional
+- [ ] N8N Setup (n8n_setup.py) — disponível via menu
+- [ ] Grafana Setup (grafana_setup.py) — disponível via menu
+- [ ] GOWA Setup (gowa_setup.py) — disponível via menu
+- [ ] LivChatBridge Setup (livchatbridge_setup.py) — disponível via menu
 
 ### Próximas Funcionalidades
 - [ ] Backup automático

@@ -21,8 +21,6 @@ Sistema modular de configuração de servidor Linux com Docker Swarm, Traefik, P
 - [x] Chatwoot (Customer Support)
 - [x] Directus (Headless CMS)
 - [ ] N8N (Automação)
-- [ ] Typebot (Chatbot Builder)
-- [ ] Evolution API (WhatsApp)
 
 ## 🛠️ Pré-requisitos
 
@@ -157,35 +155,47 @@ Siga este passo a passo para integrar uma nova aplicação ("stack") ao setup.
 
 ```
 .
-├── main.py                    # Ponto de entrada (sempre menu)
-├── config.py                 # Configurações globais
-├── requirements.txt          # Dependências Python
-├── ARQUITETURA.md           # Documentação da arquitetura
-├── setup/                   # Módulos de instalação
+├── main.py                      # Ponto de entrada (menu)
+├── config.py                    # Configurações / logging
+├── requirements.txt             # Dependências Python
+├── ARQUITETURA.md               # Documentação de arquitetura
+├── setup/                       # Módulos de instalação
+│   ├── base_setup.py
 │   ├── basic_setup.py
+│   ├── hostname_setup.py
 │   ├── docker_setup.py
 │   ├── traefik_setup.py
 │   ├── portainer_setup.py
+│   ├── cleanup_setup.py
 │   ├── redis_setup.py
 │   ├── postgres_setup.py
+│   ├── pgvector_setup.py
 │   ├── minio_setup.py
-│   └── chatwoot_setup.py
-│   └── directus_setup.py
-├── templates/               # Templates Docker Compose
+│   ├── chatwoot_setup.py
+│   ├── directus_setup.py
+│   ├── n8n_setup.py
+│   ├── grafana_setup.py
+│   ├── gowa_setup.py
+│   └── livchatbridge_setup.py
+├── templates/                   # Templates Docker Compose (Jinja2)
 │   └── docker-compose/
-│       └── directus.yaml.j2
-└── utils/                   # Utilitários
+│       ├── traefik.yaml.j2
+│       ├── portainer.yaml.j2
+│       ├── redis.yaml.j2
+│       ├── postgres.yaml.j2
+│       ├── pgvector.yaml.j2
+│       ├── minio.yaml.j2
+│       ├── chatwoot.yaml.j2
+│       ├── directus.yaml.j2
+│       ├── grafana.yaml.j2
+│       ├── gowa.yaml.j2
+│       └── livchatbridge.yaml.j2
+└── utils/                       # Utilitários
     ├── interactive_menu.py      # Menu interativo
     ├── module_coordinator.py    # Coordenador de módulos
-    ├── portainer_api.py         # API do Portainer
+    ├── portainer_api.py         # Integração Portainer
     └── template_engine.py       # Engine de templates
 ```
-
-## 📊 Status do Projeto
-
-- **Versão Atual**: 2.0
-- **Última Atualização**: Janeiro 2025
-- **Status**: Produção (Chatwoot funcional)
 
 ## 📝 Licença
 
