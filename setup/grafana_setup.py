@@ -16,10 +16,11 @@ from utils.cloudflare_api import get_cloudflare_api
 class GrafanaSetup(BaseSetup):
     """Setup do Stack de Monitoramento Grafana"""
     
-    def __init__(self):
+    def __init__(self, network_name: str = None):
         super().__init__("grafana")
         self.service_name = "grafana"
         self.logger = logging.getLogger(__name__)
+        self.network_name = network_name
         
         # Inicializa APIs
         self.portainer_api = PortainerAPI()
@@ -27,6 +28,9 @@ class GrafanaSetup(BaseSetup):
     def validate_prerequisites(self) -> bool:
         """Valida pré-requisitos para instalação do Grafana"""
         try:
+            if not self.network_name:
+                self.logger.error("Nome da rede Docker é obrigatório. Forneça via parâmetro 'network_name'.")
+                return False
             # Verifica se Portainer está acessível testando deploy_service_complete
             try:
                 # Testa se o método principal existe (sem executar)
@@ -41,14 +45,14 @@ class GrafanaSetup(BaseSetup):
                 
             # Verifica se a rede Docker existe
             result = subprocess.run(
-                "docker network ls | grep orion_network",
+                f"docker network ls | grep {self.network_name}",
                 shell=True,
                 capture_output=True,
                 text=True
             )
             
             if result.returncode != 0:
-                self.logger.error("Rede Docker 'orion_network' não encontrada")
+                self.logger.error(f"Rede Docker '{self.network_name}' não encontrada")
                 return False
                 
             self.logger.info("✅ Pré-requisitos validados com sucesso")
@@ -266,7 +270,7 @@ enabled = false
             
             # 5. Prepara variáveis para o template
             variables = {
-                'network_name': 'orion_network',
+                'network_name': self.network_name,
                 'grafana_domain': user_data['grafana_domain'],
                 'prometheus_domain': user_data['prometheus_domain'],
                 'cadvisor_domain': user_data['cadvisor_domain'],

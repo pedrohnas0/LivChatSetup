@@ -191,12 +191,12 @@ Este guia descreve, de forma técnica, como adicionar um novo serviço (stack) a
   - Uso recomendado do `PortainerAPI().deploy_service_complete(...)`:
     - Parâmetros principais: `service_name`, `template_path`, `template_vars`, `volumes`, `wait_service`/`wait_services`, `credentials`.
   - Convenções:
-    - Rede: `orion_network` (externa).
+    - Rede: usar rede externa definida por `{{ network_name }}`.
     - Labels Traefik com host por domínio e `traefik.docker.network={{ network_name }}`.
     - Definir `SECRET={{ encryption_key }}` quando o serviço requiser persistência de tokens.
 
 - __Template Docker Compose (`templates/docker-compose/<servico>.yaml.j2`)__
-  - Utilize `version: "3.8"`, `networks: { orion_network: { external: true } }`.
+  - Utilize `version: "3.8"` e defina uma rede externa referenciando `{{ network_name }}` no bloco `networks`.
   - Services nomeados sob o stack; atenção aos nomes a usar em `wait_service`/`wait_services` (formato `stack_servico`).
   - Labels Traefik típicas:
     - `traefik.enable=true`

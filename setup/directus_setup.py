@@ -11,15 +11,18 @@ from utils.portainer_api import PortainerAPI
 from utils.cloudflare_api import get_cloudflare_api
 
 class DirectusSetup(BaseSetup):
-    def __init__(self):
+    def __init__(self, network_name: str = None):
         super().__init__("Instalação do Directus")
         self.portainer = PortainerAPI()
-        self.network_name = 'orion_network'
+        self.network_name = network_name
 
     def validate_prerequisites(self) -> bool:
         """Valida pré-requisitos"""
         if not self.is_docker_running():
             self.logger.error("Docker não está rodando")
+            return False
+        if not self.network_name:
+            self.logger.error("Nome da rede Docker é obrigatório. Forneça via parâmetro 'network_name'.")
             return False
         if not self._is_pgvector_running():
             self.logger.error("PgVector não está instalado. Execute primeiro a instalação do PgVector.")

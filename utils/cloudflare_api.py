@@ -8,6 +8,7 @@ import os
 import json
 import requests
 import logging
+import re
 from datetime import datetime
 
 class CloudflareAPI:
@@ -338,7 +339,145 @@ class CloudflareAPI:
             self.logger.warning(f"⚠️ Alguns registros DNS falharam para {service_name}")
         
         return success
-    
+
+    def get_public_ip(self):
+        """Obtém o IP público da máquina atual (IPv4)."""
+        endpoints = [
+            "https://api.ipify.org",
+            "https://ipv4.icanhazip.com",
+            "https://ifconfig.me/ip",
+        ]
+        ipv4_regex = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}$")
+        for url in endpoints:
+            try:
+                self.logger.debug(f"🔍 Buscando IP público em {url} ...")
+                resp = requests.get(url, timeout=5)
+                ip = resp.text.strip()
+                if ipv4_regex.match(ip):
+                    self.logger.info(f"✅ IP público detectado: {ip}")
+                    return ip
+            except Exception as e:
+                self.logger.debug(f"⚠️ Falha ao obter IP em {url}: {e}")
+        self.logger.error("❌ Não foi possível detectar o IP público")
+        return None
+
+    def _find_dns_records(self, name, record_type):
+        """Retorna a lista de registros que casam com nome e tipo."""
+        if not self.zone_id and not self.get_zone_id():
+            self.logger.error("❌ Zone ID não encontrado")
+            return []
+        url = f"{self.base_url}/zones/{self.zone_id}/dns_records"
+        params = {"name": name, "type": record_type}
+        try:
+            response = requests.get(url, headers=self.headers, params=params)
+            self._log_request("GET", url, params, response)
+            response.raise_for_status()
+            data = response.json()
+            if data.get("success"):
+                return data.get("result", [])
+            return []
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"❌ Erro ao buscar registros DNS: {e}")
+            return []
+
+    def _update_dns_record(self, record_id, data):
+        """Atualiza um registro DNS existente pelo ID (PUT)."""
+        url = f"{self.base_url}/zones/{self.zone_id}/dns_records/{record_id}"
+        try:
+            response = requests.put(url, headers=self.headers, json=data)
+            self._log_request("PUT", url, data, response)
+            response.raise_for_status()
+            result = response.json()
+            if result.get("success"):
+                self.logger.info("✅ Registro DNS atualizado com sucesso")
+                return True
+            self.logger.error(f"❌ Falha ao atualizar registro: {result.get('errors', [])}")
+            return False
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"❌ Erro ao atualizar registro: {e}")
+            return False
+
+    def create_a_record(self, name, ip, proxied=True, comment=None):
+        """Cria um registro A"""
+        if not self.zone_id and not self.get_zone_id():
+            self.logger.error("❌ Zone ID não encontrado")
+            return False
+
+        # Se já existir, considerar sucesso
+        existing = self._find_dns_records(name, "A")
+        if existing:
+            self.logger.info(f"✅ Registro A já existe para {name}")
+            return True
+
+        url = f"{self.base_url}/zones/{self.zone_id}/dns_records"
+        data = {
+            "type": "A",
+            "name": name,
+            "content": ip,
+            "ttl": 1,  # Auto TTL
+            "proxied": proxied,
+        }
+        if comment:
+            data["comment"] = comment
+
+        try:
+            self.logger.info(f"🔧 Criando registro A: {name} -> {ip}")
+            response = requests.post(url, headers=self.headers, json=data)
+            self._log_request("POST", url, data, response)
+            if response.status_code == 400:
+                self.logger.info(f"✅ Registro A já existe: {name}")
+                return True
+            response.raise_for_status()
+            result = response.json()
+            if result.get("success"):
+                self.logger.info(f"✅ Registro A criado: {name} -> {ip}")
+                return True
+            self.logger.error(f"❌ Erro ao criar registro A: {result.get('errors', [])}")
+            return False
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"❌ Erro ao criar registro A: {e}")
+            return False
+
+    def ensure_a_record(self, name, ip=None, proxied=True, comment=None):
+        """Garante que um registro A aponte para o IP desejado (criando ou atualizando)."""
+        if not self.zone_id and not self.get_zone_id():
+            self.logger.error("❌ Zone ID não encontrado")
+            return False
+
+        if not ip:
+            ip = self.get_public_ip()
+        if not ip:
+            return False
+
+        records = self._find_dns_records(name, "A")
+        if not records:
+            return self.create_a_record(name, ip, proxied=proxied, comment=comment)
+
+        # Se existir, verificar se precisa atualizar
+        record = records[0]
+        needs_update = (
+            record.get("content") != ip or
+            ("proxied" in record and record.get("proxied") != proxied) or
+            (comment is not None and record.get("comment") != comment)
+        )
+
+        if not needs_update:
+            self.logger.info(f"✅ Registro A já configurado corretamente: {name} -> {ip}")
+            return True
+
+        data = {
+            "type": "A",
+            "name": name,
+            "content": ip,
+            "ttl": 1,
+            "proxied": proxied,
+        }
+        if comment is not None:
+            data["comment"] = comment
+
+        self.logger.info(f"🔧 Atualizando registro A: {name} -> {ip}")
+        return self._update_dns_record(record.get("id"), data)
+
     def is_configured(self):
         """Verifica se a API está configurada e funcional"""
         return (self.api_key and self.email and self.zone_name and 

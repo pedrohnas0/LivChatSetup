@@ -7,14 +7,18 @@ from .base_setup import BaseSetup
 from utils.portainer_api import PortainerAPI
 
 class ChatwootSetup(BaseSetup):
-    def __init__(self):
+    def __init__(self, network_name: str = None):
         super().__init__("Instalação do Chatwoot")
         self.portainer = PortainerAPI()
+        self.network_name = network_name
 
     def validate_prerequisites(self) -> bool:
         """Valida pré-requisitos"""
         if not self.is_docker_running():
             self.logger.error("Docker não está rodando")
+            return False
+        if not self.network_name:
+            self.logger.error("Nome da rede Docker é obrigatório. Forneça via parâmetro 'network_name'.")
             return False
         
         # Verificar se PgVector está instalado
@@ -97,7 +101,7 @@ class ChatwootSetup(BaseSetup):
             'smtp_user': smtp_user,
             'smtp_password': smtp_password,
             'pgvector_password': pgvector_password,
-            'network_name': 'orion_network'
+            'network_name': self.network_name
         }
 
     def create_database(self) -> bool:

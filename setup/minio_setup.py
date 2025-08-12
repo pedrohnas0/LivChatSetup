@@ -11,12 +11,13 @@ from utils.template_engine import TemplateEngine
 from utils.portainer_api import PortainerAPI
 
 class MinioSetup(BaseSetup):
-    def __init__(self):
+    def __init__(self, network_name: str = None):
         super().__init__("Instalação do MinIO")
         self.minio_user = None
         self.minio_password = None
         self.minio_domain = None
         self.s3_domain = None
+        self.network_name = network_name
 
     def validate_prerequisites(self) -> bool:
         """Valida pré-requisitos"""
@@ -31,6 +32,9 @@ class MinioSetup(BaseSetup):
         # Verifica se Docker Swarm está ativo
         if not self.is_swarm_active():
             self.logger.error("Docker Swarm não está ativo")
+            return False
+        if not self.network_name:
+            self.logger.error("Nome da rede Docker é obrigatório. Forneça via parâmetro 'network_name'.")
             return False
             
         return True
@@ -117,7 +121,7 @@ class MinioSetup(BaseSetup):
             'minio_password': self.minio_password,
             'minio_domain': self.minio_domain,
             's3_domain': self.s3_domain,
-            'network_name': 'orion_network'
+            'network_name': self.network_name
         }
         
         # Renderiza o template

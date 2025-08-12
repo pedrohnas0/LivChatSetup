@@ -46,7 +46,7 @@ def run_setup() -> bool:
             self.hostname = None
             self.email = None
             self.portainer_domain = None
-            self.network_name = 'orion_network'
+            self.network_name = None
             self.menu = True
             self.interactive = True
             self.module = None

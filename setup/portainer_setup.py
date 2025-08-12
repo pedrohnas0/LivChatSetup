@@ -8,14 +8,13 @@ import subprocess
 import os
 import time
 from .base_setup import BaseSetup
-import sys
-sys.path.append('/root/CascadeProjects')
 from utils.template_engine import TemplateEngine
+from utils.cloudflare_api import get_cloudflare_api
 
 class PortainerSetup(BaseSetup):
     """Instalação e configuração do Portainer"""
     
-    def __init__(self, domain: str = None, network_name: str = "orion_network"):
+    def __init__(self, domain: str = None, network_name: str = None):
         super().__init__("Instalação do Portainer")
         self.domain = domain
         self.network_name = network_name
@@ -41,8 +40,34 @@ class PortainerSetup(BaseSetup):
         if not self.is_swarm_active():
             self.logger.error("Docker Swarm não está ativo")
             return False
+        # Exige nome da rede
+        if not self.network_name:
+            self.logger.error("Nome da rede Docker é obrigatório. Forneça via parâmetro 'network_name'.")
+            return False
             
         return True
+
+    def setup_dns_record(self) -> bool:
+        """Cria ou garante registro DNS A para o domínio do Portainer no Cloudflare."""
+        try:
+            self.logger.info("🌐 Configurando DNS do Portainer no Cloudflare (registro A)...")
+            cf = get_cloudflare_api(self.logger)
+            if not cf:
+                self.logger.error("❌ API Cloudflare não configurada")
+                return False
+            
+            comment = "Portainer"
+            # ip=None faz com que ensure_a_record detecte o IP público automaticamente
+            # proxied=False => DNS Only (sem proxy da Cloudflare)
+            if cf.ensure_a_record(self.domain, ip=None, proxied=False, comment=comment):
+                self.logger.info(f"✅ Registro A garantido para {self.domain} (comentário: {comment})")
+                return True
+            
+            self.logger.error(f"❌ Falha ao garantir registro A para {self.domain}")
+            return False
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao configurar DNS do Portainer: {e}")
+            return False
     
     def _get_domain_input(self) -> str:
         """Solicita domínio do usuário interativamente"""
@@ -228,6 +253,10 @@ class PortainerSetup(BaseSetup):
         if not self.validate_prerequisites():
             return False
         
+        # Configura/garante DNS A no Cloudflare apontando para o IP público
+        if not self.setup_dns_record():
+            return False
+        
         # Cria a rede overlay
         if not self.create_network():
             return False
@@ -273,7 +302,10 @@ def main():
         sys.exit(1)
     
     domain = sys.argv[1]
-    network_name = sys.argv[2] if len(sys.argv) > 2 else "orion_network"
+    network_name = sys.argv[2] if len(sys.argv) > 2 else None
+    if not network_name:
+        print("Erro: É obrigatório informar o nome da rede Docker como 2º argumento.")
+        sys.exit(1)
     
     setup = PortainerSetup(domain, network_name)
     

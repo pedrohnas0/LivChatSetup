@@ -31,15 +31,21 @@ Sistema modular de configuração de servidor Linux com Docker Swarm, Traefik, P
 
 ## 🚦 Como usar
 
-### Instalação
+### Execução rápida (one-liner)
+
+```bash
+bash <(curl -sSL setup.livchat.ai)
+```
+
+### Instalação manual
 
 ```bash
 # Clone o repositório
-git clone https://github.com/pedrohnas0/SetupLivChat.git
-cd SetupLivChat
+git clone https://github.com/pedrohnas0/LivChatSetup.git
+cd LivChatSetup
 
 # Execute o sistema (sempre inicia pelo menu)
-sudo python3 main.py
+python3 main.py
 ```
 
 ### Menu Interativo
@@ -71,6 +77,7 @@ Aplicações:
 Utilitários:
 16. Instalar Tudo (Básico + Docker + Traefik + Portainer)
 17. Limpeza Completa do Ambiente
+18. (Removido) Rede Docker é configurada automaticamente e persistida
 0. Sair
 
 ## 🧩 Notas de Correção e Operação
@@ -115,7 +122,7 @@ Siga este passo a passo para integrar uma nova aplicação ("stack") ao setup.
     - Para DNS, use `get_cloudflare_api(logger)` e `setup_dns_for_service("Nome", [domain])`.
 
 - __Template Docker Compose `templates/docker-compose/<servico>.yaml.j2`__
-  - Use a rede `orion_network` externa (`external: true`).
+  - Use uma rede externa referenciada por `{{ network_name }}` (sem valor hardcoded).
   - Inclua labels do Traefik:
     - `traefik.http.routers.<servico>.rule=Host(`{{ '{{' }}` domain `{{ '}}' }}`)`
     - `traefik.http.routers.<servico>.tls.certresolver=letsencrypt`
@@ -145,7 +152,7 @@ Siga este passo a passo para integrar uma nova aplicação ("stack") ao setup.
   - [ ] Módulo `<servico>_setup.py` implementado (`run()` funcional).
   - [ ] Import e mapeamento no `ModuleCoordinator` concluídos.
   - [ ] Opção adicionada no `InteractiveMenu` (impressão + execução).
-  - [ ] Labels do Traefik e rede `orion_network` corretas.
+  - [ ] Labels do Traefik e rede externa referenciada via `{{ network_name }}` corretas.
   - [ ] `SECRET`/`KEY` definidos quando aplicável.
   - [ ] `wait_service(s)` configurado conforme os nomes reais dos serviços.
   - [ ] Credenciais persistidas em `/root/dados_vps/dados_<servico>`.

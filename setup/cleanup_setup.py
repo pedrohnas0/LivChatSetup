@@ -118,7 +118,6 @@ class CleanupSetup(BaseSetup):
     def remove_networks(self) -> bool:
         """Remove redes específicas do projeto"""
         networks_to_remove = [
-            'orion_network',
             'volume_swarm_shared'
         ]
         

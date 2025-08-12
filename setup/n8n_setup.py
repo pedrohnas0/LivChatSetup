@@ -12,46 +12,37 @@ from setup.base_setup import BaseSetup
 from utils.portainer_api import PortainerAPI
 from utils.template_engine import TemplateEngine
 from utils.cloudflare_api import get_cloudflare_api
+from setup.postgres_setup import PostgresSetup
+from setup.redis_setup import RedisSetup
 
 class N8NSetup(BaseSetup):
     """Setup do N8N com integração Cloudflare"""
     
-    def __init__(self):
+    def __init__(self, network_name: str = None):
         super().__init__("n8n")
         self.service_name = "n8n"
         self.portainer_api = PortainerAPI()
         self.template_engine = TemplateEngine()
+        self.network_name = network_name
     
     def validate_prerequisites(self) -> bool:
         """Valida pré-requisitos para o N8N"""
-        # Verifica se PostgreSQL está rodando
         try:
-            result = subprocess.run(
-                "docker ps --filter 'name=postgres' --format '{{.Names}}'",
-                shell=True,
-                capture_output=True,
-                text=True
-            )
-            
-            if not result.stdout.strip():
-                self.logger.error("❌ PostgreSQL não encontrado. Execute primeiro o módulo PostgreSQL.")
+            if not self.network_name:
+                self.logger.error("Nome da rede Docker é obrigatório. Forneça via parâmetro 'network_name'.")
                 return False
-            
-            # Verifica se Redis está rodando
-            result = subprocess.run(
-                "docker ps --filter 'name=redis' --format '{{.Names}}'",
-                shell=True,
-                capture_output=True,
-                text=True
-            )
-            
-            if not result.stdout.strip():
-                self.logger.error("❌ Redis não encontrado. Execute primeiro o módulo Redis.")
+
+            # Garante PostgreSQL
+            if not self.ensure_postgres():
                 return False
-            
+
+            # Garante Redis
+            if not self.ensure_redis():
+                return False
+
             self.logger.info("✅ Pré-requisitos validados")
             return True
-            
+
         except Exception as e:
             self.logger.error(f"Erro ao validar pré-requisitos: {e}")
             return False
@@ -176,19 +167,18 @@ class N8NSetup(BaseSetup):
             return False
         
         try:
-            # Encontra container do PostgreSQL
+            # Encontra container da task do serviço Swarm 'postgres_postgres'
             result = subprocess.run(
-                "docker ps --filter 'name=postgres' --format '{{.Names}}'",
+                "bash -lc \"docker ps --format '{{.Names}}' | grep -E '^postgres_postgres\\.' | head -n1\"",
                 shell=True,
                 capture_output=True,
                 text=True
             )
-            
-            if not result.stdout.strip():
-                self.logger.error("Container PostgreSQL não encontrado")
+
+            container_name = result.stdout.strip()
+            if not container_name:
+                self.logger.error("Container do serviço PostgreSQL não encontrado")
                 return False
-            
-            container_name = result.stdout.strip().split('\n')[0]
             
             # Verifica se banco de dados existe
             check_db_cmd = f"docker exec {container_name} psql -U postgres -t -c \"SELECT 1 FROM pg_database WHERE datname = '{database_name}';\""
@@ -216,6 +206,39 @@ class N8NSetup(BaseSetup):
         except Exception as e:
             self.logger.error(f"Erro ao criar banco de dados: {e}")
             return False
+
+    def ensure_postgres(self) -> bool:
+        """Garante que o PostgreSQL esteja instalado e rodando; instala se necessário."""
+        # Verifica serviço do Swarm
+        check = subprocess.run(
+            "docker service ps postgres_postgres --format '{{.CurrentState}}'",
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+        if check.returncode != 0 or "Running" not in check.stdout:
+            self.logger.warning("PostgreSQL não encontrado/rodando. Iniciando instalação automática...")
+            pg = PostgresSetup(network_name=self.network_name)
+            if not pg.run():
+                self.logger.error("Falha ao instalar/configurar PostgreSQL")
+                return False
+        return True
+
+    def ensure_redis(self) -> bool:
+        """Garante que o Redis esteja instalado e rodando; instala se necessário."""
+        check = subprocess.run(
+            "docker service ps redis_redis --format '{{.CurrentState}}'",
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+        if check.returncode != 0 or "Running" not in check.stdout:
+            self.logger.warning("Redis não encontrado/rodando. Iniciando instalação automática...")
+            rd = RedisSetup(network_name=self.network_name)
+            if not rd.run():
+                self.logger.error("Falha ao instalar/configurar Redis")
+                return False
+        return True
     
     def install(self):
         """Instala o N8N"""
@@ -254,7 +277,7 @@ class N8NSetup(BaseSetup):
             
             # Prepara variáveis para o template
             variables = {
-                'network_name': 'orion_network',
+                'network_name': self.network_name,
                 'database_name': database_name,
                 'postgres_password': postgres_password,
                 'redis_password': redis_password,

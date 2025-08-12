@@ -71,65 +71,65 @@ class InteractiveMenu:
         
         if choice == "1":
             print(f"\n{self.VERDE}Executando configuração básica do sistema...{self.RESET}")
-            success = self.coordinator.execute_module('basic')
+            success = self.coordinator.run_basic_setup()
             
         elif choice == "2":
             print(f"\n{self.VERDE}Executando configuração de hostname...{self.RESET}")
-            success = self.coordinator.execute_module('hostname')
+            success = self.coordinator.run_hostname_setup(self.args.hostname)
             
         elif choice == "3":
             print(f"\n{self.VERDE}Executando instalação do Docker...{self.RESET}")
-            success = self.coordinator.execute_module('docker')
+            success = self.coordinator.run_docker_setup()
             
         elif choice == "4":
             print(f"\n{self.VERDE}Executando instalação do Traefik...{self.RESET}")
             email = self.args.email or input(f"{self.AMARELO}Digite seu email para certificados SSL: {self.RESET}")
-            success = self.coordinator.execute_module('traefik', email=email)
+            success = self.coordinator.run_traefik_setup(email)
             
         elif choice == "5":
             print(f"\n{self.VERDE}Executando instalação do Portainer...{self.RESET}")
             domain = self.args.portainer_domain or input(f"{self.AMARELO}Digite o domínio para o Portainer: {self.RESET}")
-            success = self.coordinator.execute_module('portainer', portainer_domain=domain)
+            success = self.coordinator.run_portainer_setup(domain)
             
         elif choice == "6":
             print(f"\n{self.VERDE}Executando instalação do Redis...{self.RESET}")
-            success = self.coordinator.execute_module('redis')
+            success = self.coordinator.run_redis_setup()
             
         elif choice == "7":
             print(f"\n{self.VERDE}Executando instalação do PostgreSQL...{self.RESET}")
-            success = self.coordinator.execute_module('postgres')
+            success = self.coordinator.run_postgres_setup()
             
         elif choice == "8":
             print(f"\n{self.VERDE}Executando instalação do PostgreSQL + PgVector...{self.RESET}")
-            success = self.coordinator.execute_module('pgvector')
+            success = self.coordinator.run_pgvector_setup()
             
         elif choice == "9":
             print(f"\n{self.VERDE}Executando instalação do MinIO...{self.RESET}")
-            success = self.coordinator.execute_module('minio')
+            success = self.coordinator.run_minio_setup()
             
         elif choice == "10":
             print(f"\n{self.VERDE}Executando instalação do Chatwoot...{self.RESET}")
-            success = self.coordinator.execute_module('chatwoot')
+            success = self.coordinator.run_chatwoot_setup()
                 
         elif choice == "11":
             print(f"\n{self.VERDE}Executando instalação do Directus...{self.RESET}")
-            success = self.coordinator.execute_module('directus')
+            success = self.coordinator.run_directus_setup()
                 
         elif choice == "12":
             print(f"\n{self.VERDE}Executando instalação do N8N...{self.RESET}")
-            success = self.coordinator.execute_module('n8n')
+            success = self.coordinator.run_n8n_setup()
                 
         elif choice == "13":
             print(f"\n{self.VERDE}Executando instalação do Grafana...{self.RESET}")
-            success = self.coordinator.execute_module('grafana')
+            success = self.coordinator.run_grafana_setup()
             
         elif choice == "14":
             print(f"\n{self.VERDE}Executando instalação do GOWA...{self.RESET}")
-            success = self.coordinator.execute_module('gowa')
+            success = self.coordinator.run_gowa_setup()
             
         elif choice == "15":
             print(f"\n{self.VERDE}Executando instalação do LivChatBridge...{self.RESET}")
-            success = self.coordinator.execute_module('livchatbridge')
+            success = self.coordinator.run_livchatbridge_setup()
             
         elif choice == "16":
             print(f"\n{self.VERDE}Executando instalação completa...{self.RESET}")
@@ -139,10 +139,12 @@ class InteractiveMenu:
             print(f"\n{self.VERMELHO}Executando limpeza completa...{self.RESET}")
             confirm = input(f"{self.VERMELHO}ATENÇÃO: Isso irá remover TODOS os containers, volumes e redes do Docker Swarm. Confirma? (digite 'CONFIRMO'): {self.RESET}")
             if confirm == 'CONFIRMO':
-                success = self.coordinator.execute_module('cleanup')
+                success = self.coordinator.run_cleanup_setup()
             else:
                 print(f"{self.AMARELO}Limpeza cancelada pelo usuário.{self.RESET}")
                 success = True
+        
+        
                 
         elif choice == "0":
             print(f"\n{self.BEGE}Saindo do menu...{self.RESET}")
@@ -156,20 +158,24 @@ class InteractiveMenu:
     
     def install_full_stack(self):
         """Instala o stack completo básico"""
-        modules = ['basic', 'hostname', 'docker', 'traefik', 'portainer']
-        
         print(f"\n{self.AMARELO}=== Instalação Completa do Stack ==={self.RESET}")
         print("Os módulos solicitarão as informações necessárias durante a execução.\n")
-        
-        for module in modules:
-            print(f"{self.BEGE}📋 Executando módulo: {module}{self.RESET}")
-            
-            success = self.coordinator.execute_module(module)
-            
+
+        steps = [
+            ("basic", lambda: self.coordinator.run_basic_setup()),
+            ("hostname", lambda: self.coordinator.run_hostname_setup(self.args.hostname)),
+            ("docker", lambda: self.coordinator.run_docker_setup()),
+            ("traefik", lambda: self.coordinator.run_traefik_setup(self.args.email)),
+            ("portainer", lambda: self.coordinator.run_portainer_setup(self.args.portainer_domain)),
+        ]
+
+        for name, func in steps:
+            print(f"{self.BEGE}📋 Executando módulo: {name}{self.RESET}")
+            success = func()
             if not success:
-                print(f"{self.VERMELHO}❌ Falha no módulo {module}. Interrompendo instalação.{self.RESET}")
+                print(f"{self.VERMELHO}❌ Falha no módulo {name}. Interrompendo instalação.{self.RESET}")
                 return False
-                
+
         print(f"\n{self.VERDE}✅ Instalação completa finalizada com sucesso!{self.RESET}")
         return True
     

@@ -8,14 +8,12 @@ import subprocess
 import os
 import time
 from .base_setup import BaseSetup
-import sys
-sys.path.append('/root/CascadeProjects')
 from utils.template_engine import TemplateEngine
 
 class TraefikSetup(BaseSetup):
     """Instalação e configuração do Traefik"""
     
-    def __init__(self, email: str = None, network_name: str = "orion_network"):
+    def __init__(self, email: str = None, network_name: str = None):
         super().__init__("Instalação do Traefik")
         self.email = email
         self.network_name = network_name
@@ -40,6 +38,11 @@ class TraefikSetup(BaseSetup):
         # Verifica se Docker Swarm está ativo
         if not self.is_swarm_active():
             self.logger.error("Docker Swarm não está ativo")
+            return False
+        
+        # Exige nome da rede
+        if not self.network_name:
+            self.logger.error("Nome da rede Docker é obrigatório. Forneça via parâmetro 'network_name'.")
             return False
             
         return True
@@ -304,7 +307,10 @@ def main():
         sys.exit(1)
     
     email = sys.argv[1]
-    network_name = sys.argv[2] if len(sys.argv) > 2 else "orion_network"
+    network_name = sys.argv[2] if len(sys.argv) > 2 else None
+    if not network_name:
+        print("Erro: É obrigatório informar o nome da rede Docker como 2º argumento.")
+        sys.exit(1)
     
     setup = TraefikSetup(email, network_name)
     

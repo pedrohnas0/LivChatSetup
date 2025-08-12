@@ -10,9 +10,10 @@ from utils.template_engine import TemplateEngine
 from utils.portainer_api import PortainerAPI
 
 class RedisSetup(BaseSetup):
-    def __init__(self):
+    def __init__(self, network_name: str = None):
         super().__init__("Instalação do Redis")
         self.redis_password = None
+        self.network_name = network_name
 
     def validate_prerequisites(self) -> bool:
         """Valida pré-requisitos"""
@@ -27,6 +28,10 @@ class RedisSetup(BaseSetup):
         # Verifica se Docker Swarm está ativo
         if not self.is_swarm_active():
             self.logger.error("Docker Swarm não está ativo")
+            return False
+        # Exige network_name
+        if not self.network_name:
+            self.logger.error("Nome da rede Docker é obrigatório. Forneça via parâmetro 'network_name'.")
             return False
             
         return True
@@ -78,7 +83,7 @@ class RedisSetup(BaseSetup):
         template_engine = TemplateEngine()
         template_vars = {
             'redis_password': self.redis_password,
-            'network_name': 'orion_network'
+            'network_name': self.network_name
         }
         
         # Renderiza o template

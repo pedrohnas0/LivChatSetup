@@ -15,11 +15,12 @@ from utils.cloudflare_api import get_cloudflare_api
 class GowaSetup(BaseSetup):
     """Setup do GOWA com integração Cloudflare"""
     
-    def __init__(self):
+    def __init__(self, network_name: str = None):
         super().__init__("gowa")
         self.service_name = "gowa"
         self.portainer_api = PortainerAPI()
         self.template_engine = TemplateEngine()
+        self.network_name = network_name
     
     def validate_prerequisites(self) -> bool:
         """Valida pré-requisitos para o GOWA"""
@@ -29,6 +30,9 @@ class GowaSetup(BaseSetup):
         # Apenas verifica se o Docker está funcionando
         try:
             import subprocess
+            if not self.network_name:
+                self.logger.error("Nome da rede Docker é obrigatório. Forneça via parâmetro 'network_name'.")
+                return False
             result = subprocess.run(
                 "docker --version",
                 shell=True,
@@ -94,9 +98,11 @@ class GowaSetup(BaseSetup):
                 self.logger.error("❌ Domínio não configurado. Execute setup_dns_records primeiro.")
                 return False
             
-            # Configurações padrão do ambiente
-            network_name = 'orion_network'  # Rede padrão do setup
-            
+            # Exigir network_name
+            if not self.network_name:
+                self.logger.error("Nome da rede Docker é obrigatório. Forneça via parâmetro 'network_name'.")
+                return False
+
             # Gera autenticação automática
             import base64
             password_bytes = secrets.token_bytes(48)  # 48 bytes = 64 caracteres base64
@@ -107,7 +113,7 @@ class GowaSetup(BaseSetup):
             template_vars = {
                 'service_name': self.service_name,
                 'domain': self.domain,
-                'network_name': network_name,
+                'network_name': self.network_name,
                 'basic_auth': basic_auth
             }
             
@@ -125,7 +131,6 @@ class GowaSetup(BaseSetup):
                 return False
             
             # Armazena configurações na instância
-            self.network_name = network_name
             self.basic_auth_password = basic_auth_password
             self.deployed = True
             

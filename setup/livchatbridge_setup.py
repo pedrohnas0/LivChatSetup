@@ -16,13 +16,13 @@ from utils.cloudflare_api import get_cloudflare_api
 class LivChatBridgeSetup(BaseSetup):
     """Setup do LivChatBridge com integração Cloudflare"""
     
-    def __init__(self):
+    def __init__(self, network_name: str = None):
         super().__init__("livchatbridge")
         self.service_name = "livchatbridge"
         self.portainer_api = PortainerAPI()
         self.template_engine = TemplateEngine()
         self.config = {}
-        self.args = type('Args', (), {'network_name': 'orion_network'})()  # Mock args object
+        self.network_name = network_name
         
         # Configurar logging para ser menos verboso
         logging.getLogger('urllib3').setLevel(logging.WARNING)
@@ -197,11 +197,14 @@ class LivChatBridgeSetup(BaseSetup):
         """Deploy do LivChatBridge via Docker Swarm"""
         try:
             self.logger.info("🚀 Fazendo deploy do LivChatBridge...")
+            if not self.network_name:
+                self.logger.error("Nome da rede Docker é obrigatório. Forneça via parâmetro 'network_name'.")
+                return False
             
             # Preparar variáveis do template
             template_vars = {
                 'service_name': self.service_name,
-                'network_name': self.args.network_name,
+                'network_name': self.network_name,
                 **self.config
             }
             
@@ -266,6 +269,10 @@ class LivChatBridgeSetup(BaseSetup):
         """Executa o setup completo do LivChatBridge"""
         try:
             self.logger.info("🚀 Iniciando setup do LivChatBridge...")
+            
+            if not self.network_name:
+                self.logger.error("Nome da rede Docker é obrigatório. Forneça via parâmetro 'network_name'.")
+                return False
             
             # Validar pré-requisitos
             if not self.validate_prerequisites():

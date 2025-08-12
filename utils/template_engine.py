@@ -11,7 +11,10 @@ from jinja2 import Environment, FileSystemLoader, Template
 class TemplateEngine:
     """Engine para processar templates Jinja2"""
     
-    def __init__(self, templates_dir: str = "/root/CascadeProjects/LivChatSetup/templates"):
+    def __init__(self, templates_dir: str = None):
+        if templates_dir is None:
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            templates_dir = os.path.join(project_root, "templates")
         self.templates_dir = templates_dir
         self.logger = logging.getLogger(__name__)
         
