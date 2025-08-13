@@ -342,6 +342,68 @@ class ChatwootSetup(BaseSetup):
             self.logger.error(f"Erro durante correção da senha do PostgreSQL: {e}")
             return False
     
+    def unlock_super_admin_functions(self):
+        """
+        Desbloqueia funções do super admin para permitir criação da primeira conta.
+        
+        FUNCIONALIDADE:
+        - Define installation_configs.locked = false no banco de dados
+        - Permite que o Chatwoot mostre a página de onboarding (/installation/onboarding)
+        - Sem isso, o Chatwoot assume que já foi configurado e vai direto para login
+        - Facilita o processo de instalação evitando criação manual de conta no DB
+        
+        NOTA: Atualmente comentado pois rails db:chatwoot_prepare já resolve o problema.
+        Mantido para compatibilidade futura ou casos específicos.
+        """
+        import subprocess
+        
+        try:
+            # Encontra o container do PgVector
+            result = subprocess.run(
+                "docker ps -q --filter 'name=pgvector'",
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0 or not result.stdout.strip():
+                self.logger.error("Container do PgVector não encontrado")
+                return False
+            
+            pgvector_container = result.stdout.strip()
+            
+            # Executa o comando SQL para desbloquear installation_configs
+            self.logger.info("Desbloqueando funções do super admin...")
+            
+            # Comando SQL corrigido - usando PGPASSWORD e comando separado
+            pgvector_password = self._get_pgvector_password()
+            sql_commands = [
+                f"docker exec -i {pgvector_container} psql -U postgres -d chatwoot -c \"UPDATE installation_configs SET locked = false;\""
+            ]
+            
+            for sql_command in sql_commands:
+                result = subprocess.run(
+                    sql_command,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    env={'PGPASSWORD': pgvector_password}
+                )
+                
+                if result.returncode == 0:
+                    self.logger.info("[ OK ] - Desbloqueando tabela installation_configs no pgvector")
+                    return True
+                else:
+                    self.logger.error("[ ERRO ] - Falha ao desbloquear tabela installation_configs")
+                    self.logger.error(f"Erro: {result.stderr}")
+                    return False
+                
+        except Exception as e:
+            self.logger.error(f"Erro ao desbloquear funções do super admin: {e}")
+            return False
+
     def run_database_migrations(self):
         """Executa as migrações do banco de dados do Chatwoot"""
         import subprocess
@@ -368,6 +430,15 @@ class ChatwootSetup(BaseSetup):
             
             if result.returncode == 0:
                 self.logger.info("[ OK ] - Executando: bundle exec rails db:chatwoot_prepare")
+                
+                # OPCIONAL: Desbloqueia funções do super admin (permite criação da primeira conta)
+                # Comentado pois rails db:chatwoot_prepare já resolve o problema na maioria dos casos
+                # Descomente se necessário para casos específicos:
+                # if self.unlock_super_admin_functions():
+                #     self.logger.info("Super admin desbloqueado com sucesso")
+                # else:
+                #     self.logger.warning("Falha ao desbloquear super admin (não crítico)")
+                
                 self.logger.info("Setup inicial do Chatwoot concluído com sucesso")
                 return True
             else:
