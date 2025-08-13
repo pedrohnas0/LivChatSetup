@@ -9,6 +9,7 @@ import subprocess
 from .base_setup import BaseSetup
 from utils.portainer_api import PortainerAPI
 from utils.cloudflare_api import get_cloudflare_api
+from setup.pgvector_setup import PgVectorSetup
 
 class DirectusSetup(BaseSetup):
     def __init__(self, network_name: str = None):
@@ -24,8 +25,8 @@ class DirectusSetup(BaseSetup):
         if not self.network_name:
             self.logger.error("Nome da rede Docker é obrigatório. Forneça via parâmetro 'network_name'.")
             return False
-        if not self._is_pgvector_running():
-            self.logger.error("PgVector não está instalado. Execute primeiro a instalação do PgVector.")
+        # Garante PgVector (instala automaticamente se necessário)
+        if not self.ensure_pgvector():
             return False
         return True
 
@@ -56,6 +57,25 @@ class DirectusSetup(BaseSetup):
             )
             return "pgvector" in result.stdout
         except Exception:
+            return False
+
+    def ensure_pgvector(self) -> bool:
+        """Garante que PgVector esteja instalado e rodando; instala se necessário."""
+        if self._is_pgvector_running():
+            return True
+        self.logger.warning("PgVector não encontrado/rodando. Iniciando instalação automática...")
+        try:
+            installer = PgVectorSetup(network_name=self.network_name)
+            if not installer.run():
+                self.logger.error("Falha ao instalar/configurar PgVector")
+                return False
+            # Revalida
+            if self._is_pgvector_running():
+                return True
+            self.logger.error("PgVector ainda não está rodando após instalação")
+            return False
+        except Exception as e:
+            self.logger.error(f"Erro ao garantir PgVector: {e}")
             return False
 
     def _get_pgvector_password(self) -> str:

@@ -5,6 +5,8 @@ import logging
 import os
 from .base_setup import BaseSetup
 from utils.portainer_api import PortainerAPI
+from setup.pgvector_setup import PgVectorSetup
+from utils.cloudflare_api import get_cloudflare_api
 
 class ChatwootSetup(BaseSetup):
     def __init__(self, network_name: str = None):
@@ -21,9 +23,8 @@ class ChatwootSetup(BaseSetup):
             self.logger.error("Nome da rede Docker é obrigatório. Forneça via parâmetro 'network_name'.")
             return False
         
-        # Verificar se PgVector está instalado
-        if not self._is_pgvector_running():
-            self.logger.error("PgVector não está instalado. Execute primeiro a instalação do PgVector.")
+        # Garante PgVector (instala automaticamente se necessário)
+        if not self.ensure_pgvector():
             return False
             
         return True
@@ -40,6 +41,40 @@ class ChatwootSetup(BaseSetup):
             )
             return "pgvector" in result.stdout
         except Exception:
+            return False
+
+    def is_docker_running(self) -> bool:
+        """Verifica se Docker está rodando"""
+        try:
+            result = subprocess.run(
+                "docker info",
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            return result.returncode == 0
+        except Exception as e:
+            self.logger.debug(f"Erro ao verificar Docker: {e}")
+            return False
+
+    def ensure_pgvector(self) -> bool:
+        """Garante que PgVector esteja instalado e rodando; instala se necessário."""
+        if self._is_pgvector_running():
+            return True
+        self.logger.warning("PgVector não encontrado/rodando. Iniciando instalação automática...")
+        try:
+            installer = PgVectorSetup(network_name=self.network_name)
+            if not installer.run():
+                self.logger.error("Falha ao instalar/configurar PgVector")
+                return False
+            # Revalida
+            if self._is_pgvector_running():
+                return True
+            self.logger.error("PgVector ainda não está rodando após instalação")
+            return False
+        except Exception as e:
+            self.logger.error(f"Erro ao garantir PgVector: {e}")
             return False
 
     def _get_pgvector_password(self) -> str:
@@ -130,6 +165,15 @@ class ChatwootSetup(BaseSetup):
             self.logger.error(f"Erro ao criar banco de dados: {e}")
             return False
 
+    def setup_dns_records(self, domain: str) -> bool:
+        """Configura registros DNS via Cloudflare (padrão similar ao Directus/N8N)"""
+        self.logger.info("Configurando registros DNS via Cloudflare...")
+        cf = get_cloudflare_api(self.logger)
+        if not cf:
+            self.logger.error("Falha ao inicializar Cloudflare API")
+            return False
+        return cf.setup_dns_for_service("Chatwoot", [domain])
+
     def run(self):
         """Executa instalação do Chatwoot usando métodos genéricos do PortainerAPI"""
         try:
@@ -141,6 +185,10 @@ class ChatwootSetup(BaseSetup):
                 variables = self.collect_user_inputs()
                 if not variables:
                     print("\nVamos tentar novamente...\n")
+            
+            # DNS via Cloudflare (não bloqueante)
+            if not self.setup_dns_records(variables['domain']):
+                self.logger.warning("Falha na configuração DNS, continuando mesmo assim...")
             
             # Criar banco de dados
             if not self.create_database():
