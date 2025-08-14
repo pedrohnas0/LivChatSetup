@@ -28,6 +28,7 @@ from setup.grafana_setup import GrafanaSetup
 from setup.gowa_setup import GowaSetup
 from setup.livchatbridge_setup import LivChatBridgeSetup
 from setup.directus_setup import DirectusSetup
+from setup.passbolt_setup import PassboltSetup
 
 class ModuleCoordinator:
     """Coordenador simplificado dos módulos de setup"""
@@ -303,6 +304,13 @@ class ModuleCoordinator:
                 directus_setup = DirectusSetup(network_name=self.args.network_name)
                 return directus_setup.run()
             
+            elif module_name == 'passbolt':
+                if not self.ensure_network_name():
+                    self.logger.warning("Nome da rede não definido. Pulando instalação do Passbolt.")
+                    return True
+                passbolt_setup = PassboltSetup(network_name=self.args.network_name)
+                return passbolt_setup.run()
+            
             elif module_name == 'n8n':
                 if not self.ensure_network_name():
                     self.logger.warning("Nome da rede não definido. Pulando instalação do N8N.")
@@ -475,6 +483,14 @@ class ModuleCoordinator:
         directus_setup = DirectusSetup(network_name=self.args.network_name)
         return directus_setup.run()
     
+    def run_passbolt_setup(self) -> bool:
+        """Executa setup do Passbolt"""
+        if not self.ensure_network_name():
+            self.logger.warning("Nome da rede não definido. Pulando instalação do Passbolt.")
+            return True
+        passbolt_setup = PassboltSetup(network_name=self.args.network_name)
+        return passbolt_setup.run()
+    
     def run_n8n_setup(self) -> bool:
         """Executa setup do N8N"""
         if not self.ensure_network_name():
@@ -527,6 +543,7 @@ class ModuleCoordinator:
             'minio': ('MinIO (S3)', lambda: self.run_minio_setup()),
             'chatwoot': ('Chatwoot', lambda: self.run_chatwoot_setup()),
             'directus': ('Directus', lambda: self.run_directus_setup()),
+            'passbolt': ('Passbolt', lambda: self.run_passbolt_setup()),
             'n8n': ('N8N', lambda: self.run_n8n_setup()),
             'grafana': ('Grafana', lambda: self.run_grafana_setup()),
             'gowa': ('GOWA', lambda: self.run_gowa_setup()),

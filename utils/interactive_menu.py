@@ -48,6 +48,7 @@ class InteractiveMenu:
         print(f"{self.AMARELO} [13]{self.BRANCO} Grafana (Stack de Monitoramento){self.RESET}")
         print(f"{self.AMARELO} [14]{self.BRANCO} GOWA (WhatsApp API Multi Device){self.RESET}")
         print(f"{self.AMARELO} [15]{self.BRANCO} LivChatBridge (Webhook Connector Chatwoot-GOWA){self.RESET}")
+        print(f"{self.AMARELO} [18]{self.BRANCO} Passbolt (Password Manager + Cloudflare DNS){self.RESET}")
         print()
         print(f"{self.VERDE}  UTILITÁRIOS:{self.RESET}")
         print(f"{self.AMARELO} [16]{self.BRANCO} Instalar Tudo (Básico + Docker + Traefik + Portainer){self.RESET}")
@@ -59,7 +60,7 @@ class InteractiveMenu:
     def get_user_choice(self):
         """Obtém a escolha do usuário"""
         try:
-            choice = input(f"{self.AMARELO}Digite sua opção [0-17]: {self.RESET}").strip()
+            choice = input(f"{self.AMARELO}Digite sua opção [0-18]: {self.RESET}").strip()
             return choice
         except KeyboardInterrupt:
             print(f"\n{self.VERMELHO}Operação cancelada pelo usuário.{self.RESET}")
@@ -130,6 +131,10 @@ class InteractiveMenu:
         elif choice == "15":
             print(f"\n{self.VERDE}Executando instalação do LivChatBridge...{self.RESET}")
             success = self.coordinator.run_livchatbridge_setup()
+        
+        elif choice == "18":
+            print(f"\n{self.VERDE}Executando instalação do Passbolt...{self.RESET}")
+            success = self.coordinator.run_passbolt_setup()
             
         elif choice == "16":
             print(f"\n{self.VERDE}Executando instalação completa...{self.RESET}")

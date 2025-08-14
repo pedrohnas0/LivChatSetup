@@ -132,34 +132,45 @@ class CloudflareAPI:
         }
         
         url = f"{self.base_url}/zones"
+        page = 1
+        per_page = 50  # limite típico suportado pela API
+        zones = []
         
         try:
-            self.logger.debug("🔍 Listando zonas disponíveis...")
-            
-            response = requests.get(url, headers=temp_headers)
-            self._log_request("GET", url, None, response)
-            
-            response.raise_for_status()
-            
-            data = response.json()
-            if data["success"] and data["result"]:
-                zones = []
-                for zone in data["result"]:
+            self.logger.debug("🔍 Listando zonas disponíveis (com paginação)...")
+            while True:
+                params = {"page": page, "per_page": per_page}
+                response = requests.get(url, headers=temp_headers, params=params)
+                self._log_request("GET", url, params, response)
+                response.raise_for_status()
+                data = response.json()
+                if not data.get("success"):
+                    self.logger.error(f"❌ Erro na página {page}: {data.get('errors', [])}")
+                    break
+                results = data.get("result", []) or []
+                for zone in results:
                     zones.append({
-                        "id": zone["id"],
-                        "name": zone["name"],
-                        "status": zone["status"]
+                        "id": zone.get("id"),
+                        "name": zone.get("name"),
+                        "status": zone.get("status")
                     })
-                
-                self.logger.info(f"✅ Encontradas {len(zones)} zonas")
+                info = data.get("result_info", {}) or {}
+                total_pages = info.get("total_pages")
+                self.logger.debug(f"📄 Página {page}/{total_pages or '?'} - itens: {len(results)}")
+                # Condições de parada
+                if total_pages:
+                    if page >= total_pages:
+                        break
+                else:
+                    if len(results) < per_page:
+                        break
+                page += 1
+            if zones:
+                self.logger.info(f"✅ Encontradas {len(zones)} zonas (paginadas)")
                 return zones
             else:
                 self.logger.error("❌ Nenhuma zona encontrada")
-                if data.get("errors"):
-                    for error in data["errors"]:
-                        self.logger.error(f"   Erro: {error}")
                 return []
-                
         except requests.exceptions.RequestException as e:
             self.logger.error(f"❌ Erro ao listar zonas: {e}")
             return []
