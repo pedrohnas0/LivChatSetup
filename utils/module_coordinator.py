@@ -29,6 +29,7 @@ from setup.gowa_setup import GowaSetup
 from setup.livchatbridge_setup import LivChatBridgeSetup
 from setup.directus_setup import DirectusSetup
 from setup.passbolt_setup import PassboltSetup
+from setup.evolution_setup import EvolutionSetup
 
 class ModuleCoordinator:
     """Coordenador simplificado dos módulos de setup"""
@@ -581,6 +582,15 @@ class ModuleCoordinator:
                             break
         
         return len(failed_modules) == 0
+    
+    def run_evolution_setup(self) -> bool:
+        """Executa setup da Evolution API v2"""
+        try:
+            setup = EvolutionSetup(network_name=self.args.network_name)
+            return setup.run()
+        except Exception as e:
+            self.logger.error(f"Erro no setup da Evolution API: {e}")
+            return False
     
     def show_summary(self, success: bool) -> None:
         """Exibe resumo da execução"""

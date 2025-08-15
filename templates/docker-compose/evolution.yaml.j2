@@ -1,0 +1,194 @@
+version: "3.7"
+services:
+
+## --------------------------- EVOLUTION API V2 --------------------------- ##
+
+  evolution_app:
+    image: atendai/evolution-api:v2.1.2
+    container_name: evolution_app
+    restart: always
+    
+    networks:
+      - {{ network_name }}
+    
+    volumes:
+      - evolution_instances:/evolution/instances
+    
+    environment:
+      ## 🔧 Configurações Gerais
+      - SERVER_URL=https://{{ domain }}
+      - AUTHENTICATION_API_KEY={{ global_api_key }}
+      - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
+      - DEL_INSTANCE=false
+      - QRCODE_LIMIT=1902
+      - LANGUAGE=pt-BR
+      
+      ## 📱 Configuração do Cliente WhatsApp
+      - CONFIG_SESSION_PHONE_VERSION=2.3000.1023015479
+      - CONFIG_SESSION_PHONE_CLIENT=LivChat
+      - CONFIG_SESSION_PHONE_NAME=Chrome
+      
+      ## 🗄️ Configuração do Banco de Dados PostgreSQL
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://postgres:{{ postgres_password }}@postgres:5432/{{ database_name }}
+      - DATABASE_CONNECTION_CLIENT_NAME={{ database_name }}
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
+      - DATABASE_SAVE_MESSAGE_UPDATE=true
+      - DATABASE_SAVE_DATA_CONTACTS=true
+      - DATABASE_SAVE_DATA_CHATS=true
+      - DATABASE_SAVE_DATA_LABELS=true
+      - DATABASE_SAVE_DATA_HISTORIC=true
+      
+      ## 🤖 Integrações Habilitadas
+      - OPENAI_ENABLED=true
+      - DIFY_ENABLED=true
+      - TYPEBOT_ENABLED=true
+      - TYPEBOT_API_VERSION=latest
+      
+      ## 💬 Integração com Chatwoot
+      - CHATWOOT_ENABLED=true
+      - CHATWOOT_MESSAGE_READ=true
+      - CHATWOOT_MESSAGE_DELETE=true
+      - CHATWOOT_IMPORT_DATABASE_CONNECTION_URI=postgresql://postgres:{{ postgres_password }}@postgres:5432/chatwoot?sslmode=disable
+      - CHATWOOT_IMPORT_PLACEHOLDER_MEDIA_MESSAGE=false
+      
+      ## 🧠 Configuração do Cache Redis
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://redis:6379/8
+      - CACHE_REDIS_PREFIX_KEY=evolution
+      - CACHE_REDIS_SAVE_INSTANCES=false
+      - CACHE_LOCAL_ENABLED=false
+      
+      ## ☁️ Configuração do S3 (Desabilitado por padrão)
+      - S3_ENABLED=false
+      - S3_ACCESS_KEY=
+      - S3_SECRET_KEY=
+      - S3_BUCKET=evolution
+      - S3_PORT=443
+      - S3_ENDPOINT=
+      - S3_USE_SSL=true
+      
+      ## 📞 WhatsApp Business API
+      - WA_BUSINESS_TOKEN_WEBHOOK=evolution
+      - WA_BUSINESS_URL=https://graph.facebook.com
+      - WA_BUSINESS_VERSION=v20.0
+      - WA_BUSINESS_LANGUAGE=pt_BR
+      
+      ## 📊 Telemetria (Desabilitada)
+      - TELEMETRY=false
+      - TELEMETRY_URL=
+      
+      ## 🔌 WebSocket (Desabilitado por padrão)
+      - WEBSOCKET_ENABLED=false
+      - WEBSOCKET_GLOBAL_EVENTS=false
+      
+      ## 📨 SQS (Desabilitado por padrão)
+      - SQS_ENABLED=false
+      - SQS_ACCESS_KEY_ID=
+      - SQS_SECRET_ACCESS_KEY=
+      - SQS_ACCOUNT_ID=
+      - SQS_REGION=
+      
+      ## 🐰 RabbitMQ (Desabilitado por padrão)
+      - RABBITMQ_ENABLED=false
+      - RABBITMQ_URI=amqp://USER:PASS@rabbitmq:5672/{{ database_name }}
+      - RABBITMQ_EXCHANGE_NAME=evolution
+      - RABBITMQ_GLOBAL_ENABLED=false
+      - RABBITMQ_EVENTS_APPLICATION_STARTUP=false
+      - RABBITMQ_EVENTS_INSTANCE_CREATE=false
+      - RABBITMQ_EVENTS_INSTANCE_DELETE=false
+      - RABBITMQ_EVENTS_QRCODE_UPDATED=false
+      - RABBITMQ_EVENTS_MESSAGES_SET=false
+      - RABBITMQ_EVENTS_MESSAGES_UPSERT=true
+      - RABBITMQ_EVENTS_MESSAGES_EDITED=false
+      - RABBITMQ_EVENTS_MESSAGES_UPDATE=false
+      - RABBITMQ_EVENTS_MESSAGES_DELETE=false
+      - RABBITMQ_EVENTS_SEND_MESSAGE=false
+      - RABBITMQ_EVENTS_CONTACTS_SET=false
+      - RABBITMQ_EVENTS_CONTACTS_UPSERT=false
+      - RABBITMQ_EVENTS_CONTACTS_UPDATE=false
+      - RABBITMQ_EVENTS_PRESENCE_UPDATE=false
+      - RABBITMQ_EVENTS_CHATS_SET=false
+      - RABBITMQ_EVENTS_CHATS_UPSERT=false
+      - RABBITMQ_EVENTS_CHATS_UPDATE=false
+      - RABBITMQ_EVENTS_CHATS_DELETE=false
+      - RABBITMQ_EVENTS_GROUPS_UPSERT=false
+      - RABBITMQ_EVENTS_GROUP_UPDATE=false
+      - RABBITMQ_EVENTS_GROUP_PARTICIPANTS_UPDATE=false
+      - RABBITMQ_EVENTS_CONNECTION_UPDATE=true
+      - RABBITMQ_EVENTS_CALL=false
+      - RABBITMQ_EVENTS_TYPEBOT_START=false
+      - RABBITMQ_EVENTS_TYPEBOT_CHANGE_STATUS=false
+      
+      ## 🪝 Configuração do Webhook Global (Desabilitado por padrão)
+      - WEBHOOK_GLOBAL_ENABLED=false
+      - WEBHOOK_GLOBAL_URL=
+      - WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS=false
+      - WEBHOOK_EVENTS_APPLICATION_STARTUP=false
+      - WEBHOOK_EVENTS_QRCODE_UPDATED=false
+      - WEBHOOK_EVENTS_MESSAGES_SET=false
+      - WEBHOOK_EVENTS_MESSAGES_UPSERT=false
+      - WEBHOOK_EVENTS_MESSAGES_EDITED=false
+      - WEBHOOK_EVENTS_MESSAGES_UPDATE=false
+      - WEBHOOK_EVENTS_MESSAGES_DELETE=false
+      - WEBHOOK_EVENTS_SEND_MESSAGE=false
+      - WEBHOOK_EVENTS_CONTACTS_SET=false
+      - WEBHOOK_EVENTS_CONTACTS_UPSERT=false
+      - WEBHOOK_EVENTS_CONTACTS_UPDATE=false
+      - WEBHOOK_EVENTS_PRESENCE_UPDATE=false
+      - WEBHOOK_EVENTS_CHATS_SET=false
+      - WEBHOOK_EVENTS_CHATS_UPSERT=false
+      - WEBHOOK_EVENTS_CHATS_UPDATE=false
+      - WEBHOOK_EVENTS_CHATS_DELETE=false
+      - WEBHOOK_EVENTS_GROUPS_UPSERT=false
+      - WEBHOOK_EVENTS_GROUPS_UPDATE=false
+      - WEBHOOK_EVENTS_GROUP_PARTICIPANTS_UPDATE=false
+      - WEBHOOK_EVENTS_CONNECTION_UPDATE=false
+      - WEBHOOK_EVENTS_LABELS_EDIT=false
+      - WEBHOOK_EVENTS_LABELS_ASSOCIATION=false
+      - WEBHOOK_EVENTS_CALL=false
+      - WEBHOOK_EVENTS_TYPEBOT_START=false
+      - WEBHOOK_EVENTS_TYPEBOT_CHANGE_STATUS=false
+      - WEBHOOK_EVENTS_ERRORS=false
+      - WEBHOOK_EVENTS_ERRORS_WEBHOOK=
+      
+      ## 🔌 Provider (Desabilitado por padrão)
+      - PROVIDER_ENABLED=false
+      - PROVIDER_HOST=127.0.0.1
+      - PROVIDER_PORT=5656
+      - PROVIDER_PREFIX={{ database_name }}
+    
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1024M
+      labels:
+        ## 🌐 Traefik - Proxy Reverso
+        - traefik.enable=true
+        - traefik.http.routers.evolution_app.rule=Host(`{{ domain }}`)
+        - traefik.http.routers.evolution_app.entrypoints=websecure
+        - traefik.http.routers.evolution_app.priority=1
+        - traefik.http.routers.evolution_app.tls.certresolver=letsencryptresolver
+        - traefik.http.routers.evolution_app.service=evolution_app
+        - traefik.http.services.evolution_app.loadbalancer.server.port=8080
+        - traefik.http.services.evolution_app.loadbalancer.passHostHeader=true
+
+## --------------------------- EVOLUTION API V2 --------------------------- ##
+
+volumes:
+  evolution_instances:
+    external: true
+    name: evolution_instances
+
+networks:
+  {{ network_name }}:
+    external: true
+    name: {{ network_name }}
