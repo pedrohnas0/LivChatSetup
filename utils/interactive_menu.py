@@ -147,12 +147,8 @@ class InteractiveMenu:
             
         elif choice == "17":
             print(f"\n{self.VERMELHO}Executando limpeza completa...{self.RESET}")
-            confirm = input(f"{self.VERMELHO}ATENÇÃO: Isso irá remover TODOS os containers, volumes e redes do Docker Swarm. Confirma? (digite 'CONFIRMO'): {self.RESET}")
-            if confirm == 'CONFIRMO':
-                success = self.coordinator.run_cleanup_setup()
-            else:
-                print(f"{self.AMARELO}Limpeza cancelada pelo usuário.{self.RESET}")
-                success = True
+            # Confirmação única é tratada pelo próprio módulo CleanupSetup
+            success = self.coordinator.run_cleanup_setup()
         
         
                 

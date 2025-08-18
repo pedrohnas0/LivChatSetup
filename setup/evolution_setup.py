@@ -8,6 +8,7 @@ Inclui integração com PostgreSQL, Redis e Cloudflare para DNS automático.
 import subprocess
 import os
 import secrets
+from urllib.parse import quote
 from .base_setup import BaseSetup
 from utils.portainer_api import PortainerAPI
 from utils.cloudflare_api import get_cloudflare_api
@@ -148,15 +149,36 @@ class EvolutionSetup(BaseSetup):
                 self.logger.error("Arquivo de credenciais do PostgreSQL não encontrado")
                 return None
             
-            with open(creds_path, 'r') as f:
+            with open(creds_path, 'r', encoding='utf-8') as f:
                 for line in f:
-                    if line.startswith('senha_postgres='):
-                        return line.split('=', 1)[1].strip()
+                    stripped = line.strip()
+                    if stripped.lower().startswith('senha:'):
+                        return stripped.split(':', 1)[1].strip()
             
-            self.logger.error("Senha do PostgreSQL não encontrada no arquivo de credenciais")
+            self.logger.error("Senha do PostgreSQL não encontrada no arquivo de credenciais (esperado formato 'Senha: ...')")
             return None
         except Exception as e:
             self.logger.error(f"Erro ao ler credenciais do PostgreSQL: {e}")
+            return None
+
+    def _get_redis_password(self) -> str:
+        """Obtém a senha do Redis do arquivo de credenciais"""
+        try:
+            creds_path = "/root/dados_vps/dados_redis"
+            if not os.path.exists(creds_path):
+                self.logger.error("Arquivo de credenciais do Redis não encontrado")
+                return None
+            
+            with open(creds_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    stripped = line.strip()
+                    if stripped.lower().startswith('senha:'):
+                        return stripped.split(':', 1)[1].strip()
+            
+            self.logger.error("Senha do Redis não encontrada no arquivo de credenciais (esperado formato 'Senha: ...')")
+            return None
+        except Exception as e:
+            self.logger.error(f"Erro ao ler credenciais do Redis: {e}")
             return None
 
     def _create_database(self, db_name: str) -> bool:
@@ -215,6 +237,13 @@ class EvolutionSetup(BaseSetup):
             if not postgres_password:
                 self.logger.error("Não foi possível obter a senha do PostgreSQL")
                 return False
+            # Obtém senha do Redis
+            redis_password = self._get_redis_password()
+            if not redis_password:
+                self.logger.error("Não foi possível obter a senha do Redis")
+                return False
+            # Percent-encode para uso seguro em URI
+            redis_password_uri = quote(redis_password, safe='')
 
             # Nome do banco de dados
             database_name = "evolution"
@@ -230,6 +259,8 @@ class EvolutionSetup(BaseSetup):
                 "domain": variables["domain"],
                 "global_api_key": global_api_key,
                 "postgres_password": postgres_password,
+                # Use a versão codificada na URI para evitar problemas com caracteres especiais
+                "redis_password_uri": redis_password_uri,
                 "database_name": database_name,
             }
 

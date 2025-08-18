@@ -56,7 +56,7 @@ services:
       
       ## 🧠 Configuração do Cache Redis
       - CACHE_REDIS_ENABLED=true
-      - CACHE_REDIS_URI=redis://redis:6379/8
+      - CACHE_REDIS_URI=redis://:{{ redis_password_uri }}@redis:6379/8
       - CACHE_REDIS_PREFIX_KEY=evolution
       - CACHE_REDIS_SAVE_INSTANCES=false
       - CACHE_LOCAL_ENABLED=false

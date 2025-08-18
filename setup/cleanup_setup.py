@@ -67,9 +67,34 @@ class CleanupSetup(BaseSetup):
                         ):
                             self.logger.warning(f"Falha ao remover stack {stack}")
                 
-                # Aguarda remoção completa
+                # Aguarda remoção completa com polling
                 self.logger.info("Aguardando remoção completa das stacks")
-                time.sleep(10)
+                deadline = time.time() + 60
+                while time.time() < deadline:
+                    check = subprocess.run(
+                        "docker stack ls --format '{{.Name}}'",
+                        shell=True,
+                        capture_output=True,
+                        text=True,
+                        timeout=15
+                    )
+                    remaining = [s for s in check.stdout.strip().split('\n') if s.strip()] if check.returncode == 0 else []
+                    if not remaining:
+                        break
+                    time.sleep(3)
+                # Fallback: remover serviços remanescentes, se houver
+                svc = subprocess.run(
+                    "docker service ls -q",
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=15
+                )
+                if svc.returncode == 0 and svc.stdout.strip():
+                    ids = svc.stdout.strip().split('\n')
+                    for sid in ids:
+                        if sid:
+                            self.run_command(f"docker service rm {sid}", "remoção de serviço remanescente")
             else:
                 self.logger.info("Nenhuma stack encontrada")
                 
@@ -80,27 +105,57 @@ class CleanupSetup(BaseSetup):
         return True
     
     def remove_volumes(self) -> bool:
-        """Remove volumes específicos do projeto"""
-        volumes_to_remove = [
-            'vol_certificates',
-            'portainer_data',
-            'volume_swarm_shared'
+        """Remove volumes do projeto (lista conhecida + varredura por prefixo)"""
+        # Lista estática conhecida dos módulos do projeto
+        static_vols = [
+            # Core
+            'vol_certificates', 'portainer_data', 'volume_swarm_shared',
+            # DBs
+            'redis_data', 'postgres_data', 'pgvector_data',
+            # Evolution
+            'evolution_instances',
+            # Chatwoot
+            'chatwoot_mailer', 'chatwoot_mailers', 'chatwoot_public', 'chatwoot_redis', 'chatwoot_storage',
+            # Directus
+            'directus_extensions', 'directus_uploads',
+            # GOWA
+            'gowa_gowa_data',
+            # Grafana
+            'grafana_grafana_data', 'grafana_prometheus_data',
+            # Passbolt
+            'passbolt_database', 'passbolt_gpg', 'passbolt_jwt'
         ]
-        
-        self.logger.info("Removendo volumes do projeto")
-        
-        for volume in volumes_to_remove:
+        # Prefixos para varredura dinâmica
+        prefixes = [
+            'chatwoot_', 'directus_', 'grafana_', 'passbolt_', 'gowa_',
+            'pgvector', 'postgres', 'redis', 'evolution', 'minio', 'livchatbridge'
+        ]
+        self.logger.info("Removendo volumes do projeto (estáticos + dinâmicos)")
+
+        # Coleta todos os volumes existentes
+        try:
+            list_all = subprocess.run(
+                "docker volume ls --format '{{.Name}}'",
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=20
+            )
+            all_vols = set([v.strip() for v in list_all.stdout.split('\n') if v.strip()]) if list_all.returncode == 0 else set()
+        except Exception as e:
+            self.logger.warning(f"Falha ao listar volumes: {e}")
+            all_vols = set()
+
+        # Monta conjunto alvo
+        targets = set(static_vols)
+        for v in all_vols:
+            if any(v.startswith(p) for p in prefixes):
+                targets.add(v)
+
+        # Remove um a um (idempotente)
+        for volume in sorted(targets):
             try:
-                # Verifica se o volume existe
-                result = subprocess.run(
-                    f"docker volume ls --filter name={volume} --format '{{{{.Name}}}}'",
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-                
-                if result.returncode == 0 and volume in result.stdout:
+                if volume in all_vols:
                     self.logger.info(f"Removendo volume: {volume}")
                     if not self.run_command(
                         f"docker volume rm {volume}",
@@ -109,44 +164,37 @@ class CleanupSetup(BaseSetup):
                         self.logger.warning(f"Falha ao remover volume {volume}")
                 else:
                     self.logger.debug(f"Volume {volume} não encontrado")
-                    
             except Exception as e:
-                self.logger.error(f"Erro ao verificar volume {volume}: {e}")
-        
+                self.logger.error(f"Erro ao remover volume {volume}: {e}")
+
         return True
     
     def remove_networks(self) -> bool:
-        """Remove redes específicas do projeto"""
-        networks_to_remove = [
-            'volume_swarm_shared'
-        ]
-        
+        """Remove redes não padrão (de projetos)"""
         self.logger.info("Removendo redes do projeto")
-        
-        for network in networks_to_remove:
-            try:
-                # Verifica se a rede existe
-                result = subprocess.run(
-                    f"docker network ls --filter name={network} --format '{{{{.Name}}}}'",
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-                
-                if result.returncode == 0 and network in result.stdout:
-                    self.logger.info(f"Removendo rede: {network}")
-                    if not self.run_command(
-                        f"docker network rm {network}",
-                        f"remoção da rede {network}"
-                    ):
-                        self.logger.warning(f"Falha ao remover rede {network}")
-                else:
-                    self.logger.debug(f"Rede {network} não encontrada")
-                    
-            except Exception as e:
-                self.logger.error(f"Erro ao verificar rede {network}: {e}")
-        
+        default_networks = {"bridge", "host", "none", "docker_gwbridge", "ingress"}
+        try:
+            result = subprocess.run(
+                "docker network ls --format '{{.Name}}'",
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=20
+            )
+            if result.returncode == 0:
+                networks = [n.strip() for n in result.stdout.split('\n') if n.strip()]
+                for net in networks:
+                    if net not in default_networks:
+                        self.logger.info(f"Removendo rede: {net}")
+                        if not self.run_command(
+                            f"docker network rm {net}",
+                            f"remoção da rede {net}"
+                        ):
+                            self.logger.warning(f"Falha ao remover rede {net}")
+            else:
+                self.logger.warning("Falha ao listar redes")
+        except Exception as e:
+            self.logger.error(f"Erro ao remover redes: {e}")
         return True
     
     def prune_docker_system(self) -> bool:
@@ -155,10 +203,10 @@ class CleanupSetup(BaseSetup):
         
         commands = [
             ("docker container prune -f", "limpeza de containers parados"),
-            ("docker image prune -f", "limpeza de imagens não utilizadas"),
+            ("docker image prune -af", "limpeza de imagens não utilizadas (todas)"),
             ("docker network prune -f", "limpeza de redes não utilizadas"),
             ("docker volume prune -f", "limpeza de volumes não utilizados"),
-            ("docker system prune -f", "limpeza geral do sistema")
+            ("docker system prune -af --volumes", "limpeza geral do sistema (forçada)")
         ]
         
         for command, description in commands:
