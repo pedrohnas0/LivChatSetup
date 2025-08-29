@@ -267,8 +267,8 @@ class EvolutionSetup(BaseSetup):
             # Volumes declarados no compose
             volumes = ["evolution_instances"]
 
-            # Serviços para aguardar
-            wait_services = ["evolution_app"]
+            # Serviços para aguardar (nome completo no Swarm: <stack>_<service>)
+            wait_services = ["evolution_evolution_app"]
 
             # Deploy via Portainer API
             success = self.portainer_api.deploy_service_complete(

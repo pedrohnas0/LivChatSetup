@@ -17,6 +17,12 @@ LOG_BACKUP_COUNT = 5
 COMMAND_TIMEOUT = 300  # 5 minutos
 NETWORK_TIMEOUT = 30   # 30 segundos
 
+# Intervalos globais de polling/log para espera de serviços
+# Checagem rápida e silenciosa (ex.: 300ms) e emissão de logs a cada 5s
+POLL_INTERVAL_FAST_SECONDS = 0.3   # 300ms
+LOG_STATUS_INTERVAL_SECONDS = 5    # logs de progresso a cada 5 segundos
+WAIT_TIMEOUT_SECONDS_DEFAULT = 300 # timeout padrão para aguardar serviços
+
 # Configurações do sistema
 TIMEZONE = 'America/Sao_Paulo'
 BASIC_PACKAGES = [
