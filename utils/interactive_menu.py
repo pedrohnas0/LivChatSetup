@@ -77,9 +77,12 @@ class InteractiveMenu:
         # Para controle de terminal não-bloqueante
         self.old_settings = None
         
-        # Para controle de enter duplo
-        self.last_enter_time = 0
-        self.double_click_threshold = 0.5  # 500ms
+        # Para controle de enter (removido duplo clique)
+        # self.last_enter_time = 0
+        # self.double_click_threshold = 0.5  # 500ms
+        
+        # Para controle de linhas do menu anterior (evita sobreposição)
+        self.last_drawn_lines = 15  # Valor inicial
     
     def get_filtered_apps(self):
         """Retorna lista filtrada de apps baseada no termo de pesquisa"""
@@ -168,7 +171,10 @@ class InteractiveMenu:
         header_line = f"╭─ SETUP LIVCHAT {'─' * title_padding} {counter_text} ─╮"
         
         lines.append(f"{self.CINZA}{header_line}{self.RESET}")
-        lines.append(f"{self.CINZA}│{self.BEGE} ↑/↓ navegar · → marcar (●/○) · Enter duplo executar · Digite para pesquisar{self.CINZA}   │{self.RESET}")
+        # Linha de instruções com padding dinâmico
+        instrucoes = " ↑/↓ navegar · → marcar (●/○) · Enter executar · Digite para pesquisar"
+        instrucoes_padding = 79 - len(instrucoes)  # Texto já inclui espaço inicial
+        lines.append(f"{self.CINZA}│{self.BEGE}{instrucoes}{' ' * instrucoes_padding}{self.CINZA}│{self.RESET}")
         lines.append(f"{self.CINZA}│                                                                               │{self.RESET}")
         
         # Filtrar apps baseado na pesquisa
@@ -184,7 +190,11 @@ class InteractiveMenu:
             result_count = len(current_apps)
             status = f" ({result_count}/{len(self.apps)} resultados)"
             search_text = search_display + status
-            search_padding = 78 - len(search_text)
+            
+            # Calcular padding considerando que emoji ocupa 2 caracteres visuais mas conta como 1 no len()
+            # O emoji 🔍 conta como 1 no len() mas ocupa 2 espaços visuais
+            visual_length = len(search_text) + 1  # +1 pelo emoji extra visual
+            search_padding = 79 - visual_length - 1  # -1 pelo espaço inicial
             lines.append(f"{self.CINZA}│ {self.BRANCO}{search_text}{' ' * search_padding}{self.CINZA}│{self.RESET}")
             lines.append(f"{self.CINZA}│                                                                               │{self.RESET}")
         else:
@@ -278,6 +288,9 @@ class InteractiveMenu:
         # Imprimir tudo de uma vez
         for line in lines:
             print(line)
+            
+        # Atualiza contador de linhas desenhadas para próxima limpeza
+        self.last_drawn_lines = len(lines)
     
     def get_filtered_apps_by_term(self, term):
         """Filtra apps por termo de pesquisa"""
@@ -317,10 +330,10 @@ class InteractiveMenu:
         """Gerencia entrada do usuário"""
         key = self.get_key()
         
-        # Resetar timer de Enter para outras teclas
-        current_time = time.time()
-        if key != 'ENTER':
-            self.last_enter_time = 0
+        # Removido controle de enter duplo
+        # current_time = time.time()
+        # if key != 'ENTER':
+        #     self.last_enter_time = 0
             
         # Navegação considerando filtragem
         # Determinar lista atual (filtrada ou completa)
@@ -377,51 +390,26 @@ class InteractiveMenu:
                 self.selected_index = next_index
                 return True
             
-        # Enter - Selecionar item atual ou limpar pesquisa
+        # Enter - Executar se há itens selecionados, senão seleciona item atual
         elif key == 'ENTER':
-            # Se há termo de pesquisa, seleciona item e limpa pesquisa
-            if self.search_term:
-                if self.selected_index < len(current_apps):
-                    current_app = current_apps[self.selected_index]
-                    current_app_id = current_app["id"]
-                    
-                    # Não permite seleção de itens "Em breve"
-                    if current_app["category"] != "future":
-                        if current_app_id in self.selected_items:
-                            self.selected_items.remove(current_app_id)
-                        else:
-                            self.selected_items.add(current_app_id)
+            # Se há itens selecionados, executa
+            if self.selected_items:
+                return 'CONFIRM'
+            
+            # Se não há itens selecionados, seleciona o item atual
+            if self.selected_index < len(current_apps):
+                current_app = current_apps[self.selected_index]
+                current_app_id = current_app["id"]
                 
-                # Limpa pesquisa após seleção
-                self.search_term = ""
-                self.selected_index = 0  # Reset para início
-                return True
-            else:
-                # Lógica normal de Enter duplo quando não há pesquisa
-                time_since_last = current_time - self.last_enter_time
-                
-                if self.last_enter_time > 0 and time_since_last <= self.double_click_threshold:
-                    # Enter duplo detectado (dentro do limite de tempo)
-                    self.last_enter_time = 0  # Reset
-                    return 'CONFIRM'
-                else:
-                    # Enter simples - apenas selecionar/deselecionar
-                    if self.selected_index < len(current_apps):
-                        current_app = current_apps[self.selected_index]
-                        current_app_id = current_app["id"]
-                        
-                        # Não permite seleção de itens "Em breve"
-                        if current_app["category"] == "future":
-                            self.last_enter_time = current_time
-                            return True
-                        
-                        if current_app_id in self.selected_items:
-                            self.selected_items.remove(current_app_id)
-                        else:
-                            self.selected_items.add(current_app_id)
-                    
-                    self.last_enter_time = current_time  # Marcar tempo do primeiro Enter
-                    return True
+                # Não permite seleção de itens "Em breve"
+                if current_app["category"] != "future":
+                    self.selected_items.add(current_app_id)
+                    # Limpa pesquisa se houver
+                    if self.search_term:
+                        self.search_term = ""
+                        self.selected_index = 0
+            
+            return True
                     
         # Backspace - Apagar último caractere da pesquisa
         elif key == '\x7f' or key == '\b':  # Backspace
@@ -468,8 +456,13 @@ class InteractiveMenu:
                 elif action == 'CONFIRM':
                     return list(self.selected_items)
                 elif action:  # True = redesenhar
-                    # Limpa tela completamente para evitar sobreposição
-                    print("\033[2J\033[H", end="")
+                    # Usa o contador de linhas do desenho anterior
+                    lines_to_clear = self.last_drawn_lines
+                    
+                    # Sobe N linhas e limpa cada uma
+                    for _ in range(lines_to_clear):
+                        print(f"\033[1A\033[2K", end="")  # Sobe 1 linha e limpa
+                    
                     self.draw_menu()
                     
         finally:
@@ -500,6 +493,25 @@ class InteractiveMenu:
                 print(f"{self.BEGE}  [{item_number:2d}] {app['name']}{self.RESET}")
         print()
     
+    def confirm_execution(self, selected_modules: List[str]) -> bool:
+        """Exibe tela de confirmação para execução"""
+        print(f"{self.VERDE}Confirmar execução de {len(selected_modules)} aplicação(ões)?{self.RESET}")
+        print(f"{self.BEGE}Enter = Executar · Esc = Voltar ao menu{self.RESET}")
+        
+        try:
+            self.setup_terminal()
+            
+            while True:
+                key = self.get_key()
+                
+                if key == 'ENTER':
+                    return True
+                elif key == 'ESC':
+                    return False
+                    
+        finally:
+            self.restore_terminal()
+    
     def show_ascii_art(self):
         """Exibe ASCII art do LivChat"""
         print(f"\n{self.BEGE}     ██╗     ██╗██╗   ██╗ ██████╗██╗  ██╗ █████╗ ████████╗{self.RESET}")
@@ -514,21 +526,31 @@ class InteractiveMenu:
         """Executa o menu interativo principal"""
         self.show_ascii_art()
         
-        # Executa o menu TUI
-        selected_modules = self.run_tui_menu()
-        
-        if selected_modules is None:
-            print(f"\n{self.VERDE}Obrigado por usar o Setup LivChat!{self.RESET}")
-            return True
-        
-        # Exibe resumo e executa
-        self.show_selection_summary(selected_modules)
-        success = self.execute_selected_apps(selected_modules)
-        
-        if success:
-            print(f"\n{self.VERDE}✅ Instalação concluída com sucesso!{self.RESET}")
-        else:
-            print(f"\n{self.VERMELHO}❌ Instalação concluída com falhas.{self.RESET}")
-        
-        print(f"\n{self.VERDE}Obrigado por usar o Setup LivChat!{self.RESET}")
-        return success
+        while True:
+            # Executa o menu TUI
+            selected_modules = self.run_tui_menu()
+            
+            if selected_modules is None:
+                print(f"\n{self.VERDE}Obrigado por usar o Setup LivChat!{self.RESET}")
+                return True
+            
+            # Exibe resumo e pede confirmação
+            self.show_selection_summary(selected_modules)
+            
+            if self.confirm_execution(selected_modules):
+                # Usuário confirmou - executar
+                success = self.execute_selected_apps(selected_modules)
+                
+                if success:
+                    print(f"\n{self.VERDE}✅ Instalação concluída com sucesso!{self.RESET}")
+                else:
+                    print(f"\n{self.VERMELHO}❌ Instalação concluída com falhas.{self.RESET}")
+                
+                print(f"\n{self.VERDE}Obrigado por usar o Setup LivChat!{self.RESET}")
+                return success
+            else:
+                # Usuário cancelou - volta ao menu
+                print(f"\n{self.BEGE}Voltando ao menu de seleção...{self.RESET}")
+                # Limpa seleções para começar fresh (opcional)
+                # self.selected_items.clear()
+                continue
