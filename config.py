@@ -35,10 +35,25 @@ BASIC_PACKAGES = [
     'lsb-release'
 ]
 
-def setup_logging():
-    """Configura o sistema de logging global"""
+def setup_logging(console_level='INFO'):
+    """Configura o sistema de logging global
+    
+    Args:
+        console_level: Nível de log para console ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')
+                      O arquivo sempre recebe DEBUG para auditoria completa
+    """
     logger = logging.getLogger()
-    logger.setLevel(LOG_LEVEL)
+    logger.setLevel(logging.DEBUG)  # Logger principal sempre DEBUG
+    
+    # Converte string para nível do logging
+    level_map = {
+        'DEBUG': logging.DEBUG,
+        'INFO': logging.INFO,
+        'WARNING': logging.WARNING,
+        'ERROR': logging.ERROR,
+        'CRITICAL': logging.CRITICAL
+    }
+    console_log_level = level_map.get(console_level.upper(), logging.INFO)
     
     # Remove handlers existentes
     for handler in logger.handlers[:]:
@@ -68,19 +83,19 @@ def setup_logging():
             color = self.COLORS.get(record.levelname, '')
             return f"{color}{formatted}{self.COLORS['RESET']}"
     
-    # Handler para console
+    # Handler para console (nível configurável)
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(LOG_LEVEL)
+    console_handler.setLevel(console_log_level)
     console_handler.setFormatter(ColoredTechnicalFormatter())
     logger.addHandler(console_handler)
     
-    # Handler para arquivo com rotação
+    # Handler para arquivo com rotação (sempre DEBUG para auditoria)
     file_handler = RotatingFileHandler(
         LOG_FILE, 
         maxBytes=LOG_MAX_SIZE, 
         backupCount=LOG_BACKUP_COUNT
     )
-    file_handler.setLevel(LOG_LEVEL)
+    file_handler.setLevel(logging.DEBUG)  # Arquivo sempre recebe tudo
     file_handler.setFormatter(TechnicalFormatter())
     logger.addHandler(file_handler)
     

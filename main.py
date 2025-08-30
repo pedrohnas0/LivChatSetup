@@ -7,6 +7,7 @@ Sempre inicia pelo menu interativo
 import os
 import sys
 import subprocess
+import argparse
 
 # Instala dependências automaticamente
 def install_dependencies():
@@ -35,10 +36,11 @@ def validate_prerequisites() -> bool:
     
     return True
 
-def run_setup() -> bool:
+def run_setup(log_level='CRITICAL') -> bool:
     """Executa o menu interativo"""
-    logger = setup_logging()
-    logger.info("Iniciando sistema de setup - Menu Interativo")
+    logger = setup_logging(log_level)
+    if log_level in ['DEBUG', 'INFO']:  # Só mostra se for modo verbose
+        logger.info("Iniciando sistema de setup - Menu Interativo")
     
     # Cria objeto args vazio para compatibilidade
     class EmptyArgs:
@@ -60,12 +62,45 @@ def run_setup() -> bool:
 
 def main():
     """Função principal - sempre inicia pelo menu interativo"""
+    parser = argparse.ArgumentParser(
+        description='Sistema de Setup LivChat',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Modos de log disponíveis:
+  (padrão)     Sem logs no console (silencioso)
+  --quiet      Mostra apenas ERROR e CRITICAL  
+  --verbose    Mostra todos os logs (DEBUG)
+        """
+    )
+    
+    log_group = parser.add_mutually_exclusive_group()
+    log_group.add_argument(
+        '--quiet', '-q',
+        action='store_true',
+        help='Modo silencioso - apenas erros críticos'
+    )
+    log_group.add_argument(
+        '--verbose', '-v', 
+        action='store_true',
+        help='Modo detalhado - todos os logs'
+    )
+    
+    args = parser.parse_args()
+    
+    # Define nível de log baseado nos argumentos
+    if args.quiet:
+        log_level = 'ERROR'
+    elif args.verbose:
+        log_level = 'DEBUG'
+    else:
+        log_level = 'CRITICAL'  # Padrão - sem logs no console
+    
     # Valida pré-requisitos
     if not validate_prerequisites():
         sys.exit(1)
     
     try:
-        success = run_setup()
+        success = run_setup(log_level)
         sys.exit(0 if success else 1)
     except KeyboardInterrupt:
         print("\nOperação cancelada pelo usuário.")
