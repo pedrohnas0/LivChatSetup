@@ -485,10 +485,14 @@ class BasicSetup(BaseSetup):
                 if self._validate_hostname_format(hostname):
                     if self._set_hostname(hostname):
                         if self._update_hosts_file(hostname):
+                            # Persistir no config
+                            self.config.set_hostname(hostname)
                             self.logger.info(f"Hostname configurado: {hostname}")
                             print(f"{self.VERDE}✅ Hostname alterado: {self.BRANCO}{current_hostname}{self.RESET} → {self.BRANCO}{hostname}{self.RESET}")
                         else:
                             self.logger.warning("Falha ao atualizar /etc/hosts, mas hostname foi configurado")
+                            # Persistir mesmo se /etc/hosts falhou
+                            self.config.set_hostname(hostname)
                     else:
                         self.logger.error("Falha ao configurar hostname")
                         return False
@@ -505,10 +509,14 @@ class BasicSetup(BaseSetup):
                 if self._validate_hostname_format(hostname):
                     if self._set_hostname(hostname):
                         if self._update_hosts_file(hostname):
+                            # Persistir no config
+                            self.config.set_hostname(hostname)
                             self.logger.info(f"Hostname configurado: {hostname}")
                             print(f"{self.VERDE}✅ Hostname configurado: {self.BRANCO}{hostname}{self.RESET}")
                         else:
                             self.logger.warning("Falha ao atualizar /etc/hosts, mas hostname foi configurado")
+                            # Persistir mesmo se /etc/hosts falhou
+                            self.config.set_hostname(hostname)
                     else:
                         self.logger.error("Falha ao configurar hostname")
                         return False
