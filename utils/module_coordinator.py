@@ -9,15 +9,14 @@ import os
 import termios
 import tty
 from datetime import datetime
-from typing import List, Dict, Set, Optional, Tuple
+from typing import List, Dict, Optional
 
 # Adiciona o diretório raiz ao path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import setup_logging
 from utils.config_manager import ConfigManager
-from setup.basic_setup import SystemSetup as BasicSetup
-from setup.hostname_setup import HostnameSetup
+from setup.basic_setup import BasicSetup
 from setup.docker_setup import DockerSetup
 from setup.traefik_setup import TraefikSetup
 from setup.portainer_setup import PortainerSetup
@@ -146,7 +145,7 @@ class ModuleCoordinator:
         
         # Ordem de instalação (infraestrutura primeiro)
         self.install_order = [
-            'basic', 'hostname', 'docker', 'traefik', 'portainer',
+            'basic', 'docker', 'traefik', 'portainer',
             'redis', 'postgres', 'pgvector', 'minio'
         ]
     
@@ -489,20 +488,9 @@ class ModuleCoordinator:
         """Executa um módulo específico por nome"""
         try:
             if module_name == 'basic':
-                basic_setup = BasicSetup()
-                return basic_setup.run_basic_setup()
+                basic_setup = BasicSetup(config_manager=self.config)
+                return basic_setup.run()
             
-            elif module_name == 'hostname':
-                # Resolve hostname a partir de kwargs, args, cache unificado/dedicado
-                provided = kwargs.get('hostname') or self.args.hostname or self._load_hostname()
-                hostname_setup = HostnameSetup(provided)
-                success = hostname_setup.run()
-                if success:
-                    final_hn = hostname_setup.hostname
-                    if final_hn:
-                        self.args.hostname = final_hn
-                        self._save_hostname(final_hn)
-                return success
             
             elif module_name == 'docker':
                 docker_setup = DockerSetup()
@@ -624,21 +612,9 @@ class ModuleCoordinator:
     
     def run_basic_setup(self) -> bool:
         """Executa setup básico"""
-        basic_setup = BasicSetup()
-        return basic_setup.run_basic_setup()
+        basic_setup = BasicSetup(config_manager=self.config)
+        return basic_setup.run()
     
-    def run_hostname_setup(self, hostname: str) -> bool:
-        """Executa configuração de hostname (carrega cache, pergunta se necessário, e persiste)"""
-        # Resolve hostname (args -> unificado -> dedicado -> None)
-        resolved = hostname or getattr(self.args, 'hostname', None) or self._load_hostname()
-        hostname_setup = HostnameSetup(resolved)
-        success = self.execute_module_instance("Hostname", hostname_setup)
-        if success:
-            final_hn = hostname_setup.hostname
-            if final_hn:
-                self.args.hostname = final_hn
-                self._save_hostname(final_hn)
-        return success
     
     def run_docker_setup(self) -> bool:
         """Executa instalação do Docker"""
@@ -746,149 +722,10 @@ class ModuleCoordinator:
         return ordered_modules
     
     def collect_global_config(self):
-        """Coleta configurações globais uma única vez"""
-        # ASCII Art para CONFIG
-        terminal_width = self._get_terminal_width()
-        box_width = min(101, terminal_width - 4)
-        line = "─" * (box_width - 1)
-        
-        print(f"{self.CINZA}╭{line}╮{self.RESET}")
-        print(f"{self.CINZA}│{' ' * (box_width - 1)}{self.CINZA}│{self.RESET}")
-        
-        # Centralizando o ASCII art CONFIG
-        ascii_lines = [
-            "██████╗ ██████╗ ███╗   ██╗███████╗██╗ ██████╗ ",
-            "██╔════╝██╔═══██╗████╗  ██║██╔════╝██║██╔════╝ ",
-            "██║     ██║   ██║██╔██╗ ██║█████╗  ██║██║  ███╗",
-            "██║     ██║   ██║██║╚██╗██║██╔══╝  ██║██║   ██║",
-            "╚██████╗╚██████╔╝██║ ╚████║██║     ██║╚██████╔╝",
-            " ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝     ╚═╝ ╚═════╝ "
-        ]
-        
-        for line_content in ascii_lines:
-            content_width = box_width - 1
-            centered_content = line_content.center(content_width)
-            colored_content = f"{self.LARANJA}{line_content}{self.RESET}"
-            colored_line = centered_content.replace(line_content, colored_content)
-            print(f"{self.CINZA}│{colored_line}{self.CINZA}│{self.RESET}")
-        
-        print(f"{self.CINZA}│{' ' * (box_width - 1)}{self.CINZA}│{self.RESET}")
-        print(f"{self.CINZA}╰{line}╯{self.RESET}")
-        print()
-        
-        self._print_box_title("🚀 CONFIGURAÇÃO GLOBAL LIVCHAT")
-        
-        # Email padrão do usuário
-        current_email = self.config.get_user_email()
-        if not current_email:
-            email = self.get_user_input("Digite seu email padrão (será usado para SSL e apps)", required=True)
-            if email:
-                self.config.set_user_email(email)
-        else:
-            print(f"📧 Email padrão: {current_email}")
-        
-        # Verificar configuração DNS existente
-        if self.config.is_cloudflare_auto_dns_enabled():
-            # Mostrar configuração atual
-            cloudflare_config = self.config.get_cloudflare_config()
-            zone_name = cloudflare_config.get('zone_name', 'N/A')
-            # Buscar subdomínio na configuração global
-            subdomain = self.config.get_default_subdomain() or 'nenhum'
-            
-            self._print_section_box("🌐 CLOUDFLARE CONFIGURADO")
-            print(f"{self.VERDE}✅ DNS automático ativo{self.RESET}")
-            print(f"{self.BEGE}Zona: {self.BRANCO}{zone_name}{self.RESET}")
-            print(f"{self.BEGE}Subdomínio padrão: {self.BRANCO}{subdomain}{self.RESET}")
-            
-            reconfigure = input(f"\n{self.BEGE}{self.VERDE}Enter{self.RESET}{self.BEGE} para manter ou digite {self.VERDE}'s'{self.RESET}{self.BEGE} para reconfigurar:{self.RESET} ").strip().lower()
-            if reconfigure == 's':
-                self.setup_cloudflare_dns()
-        else:
-            # Configurar pela primeira vez
-            self._print_section_box("🌐 GERENCIAMENTO DNS AUTOMÁTICO", 50)
-            print("O sistema pode gerenciar automaticamente os registros DNS via Cloudflare.")
-            print("🔒 Suas credenciais ficam seguras e armazenadas apenas localmente.")
-            
-            dns_choice = input("\nDeseja configurar gerenciamento automático de DNS? (s/N): ").strip().lower()
-            
-            if dns_choice == 's':
-                self.setup_cloudflare_dns()
-            else:
-                print("Prosseguindo sem gerenciamento DNS automático.")
-        
-        # Network name
-        self.ensure_network_name()
+        """Executa módulo de configuração global"""
+        basic_setup = BasicSetup(config_manager=self.config)
+        return basic_setup.run()
     
-    def setup_cloudflare_dns(self):
-        """Configura DNS automático Cloudflare com detecção automática de zonas"""
-        self._print_section_box("🌐 CONFIGURAÇÃO CLOUDFLARE DNS")
-        
-        # Email do Cloudflare (pode ser diferente do email padrão)
-        current_email = self.config.get_user_email()
-        cf_email_suggestion = f"Enter para '{current_email}' ou digite outro email" if current_email else "Digite o email da sua conta Cloudflare"
-        cf_email = self.get_user_input(f"Email Cloudflare ({cf_email_suggestion})")
-        if not cf_email and current_email:
-            cf_email = current_email
-        
-        if not cf_email:
-            print("Email é obrigatório. Configuração cancelada.")
-            return False
-        
-        # API Key do Cloudflare
-        api_key = self.get_user_input("Digite sua Cloudflare API Key", required=True)
-        
-        if not api_key:
-            print("API Key é obrigatória. Configuração cancelada.")
-            return False
-        
-        # Cria instância temporária para listar zonas
-        from utils.cloudflare_api import CloudflareAPI
-        temp_cf = CloudflareAPI(logger=self.logger)
-        temp_cf.api_key = api_key
-        temp_cf.email = cf_email
-        temp_cf.headers = {
-            "X-Auth-Email": cf_email,
-            "X-Auth-Key": api_key,
-            "Content-Type": "application/json"
-        }
-        
-        # Lista zonas disponíveis
-        print("\n🔍 Buscando suas zonas DNS...")
-        zones = temp_cf.list_zones()
-        if not zones:
-            print("❌ Falha ao conectar com Cloudflare ou nenhuma zona encontrada")
-            print("Verifique seu email e API Key e tente novamente.")
-            return False
-        
-        # Usar menu scrollable para seleção de zona
-        print(f"\n📋 {len(zones)} zonas encontradas - Use ↑/↓ para navegar:")
-        selected_zone = self.select_cloudflare_zone(zones)
-        
-        if not selected_zone:
-            print("\n❌ Configuração cancelada pelo usuário.")
-            return False
-            
-        zone_name = selected_zone['name']
-        zone_id = selected_zone['id']
-        print(f"\n✅ Zona selecionada: {zone_name}")
-        
-        # Subdomínio padrão (opcional)
-        subdomain = self.get_user_input("Digite um subdomínio padrão (ex: dev, Enter para sem subdomínio)")
-        
-        if subdomain:
-            self.config.set_default_subdomain(subdomain)
-            print(f"✅ Subdomínio padrão configurado: {subdomain}")
-            print(f"   Exemplo de domínios: ptn.{subdomain}.{zone_name}")
-        else:
-            print(f"✅ Sem subdomínio padrão (domínios diretos)")
-            print(f"   Exemplo de domínios: ptn.{zone_name}")
-        
-        # Converte API Key para Token format no ConfigManager (compatibilidade)
-        self.config.set_cloudflare_config(api_key, zone_id, zone_name)
-        self.config.set_cloudflare_auto_dns(True)
-        
-        print("✅ Cloudflare configurado com sucesso!")
-        return True
     
     def run_multiple_modules(self, selected_modules: List[str]) -> bool:
         """Executa múltiplos módulos com resolução de dependências"""
@@ -902,6 +739,16 @@ class ModuleCoordinator:
         
         # Coleta configurações globais primeiro (exceto para cleanup)
         self.collect_global_config()
+        
+        # Remove 'basic' dos selected_modules para evitar duplicação
+        # pois collect_global_config já executou o BasicSetup
+        if 'basic' in selected_modules:
+            selected_modules = [m for m in selected_modules if m != 'basic']
+        
+        # Se não sobrou nenhum módulo além do basic, retorna sucesso
+        if not selected_modules:
+            self.logger.info("Configuração básica concluída. Nenhum módulo adicional selecionado.")
+            return True
         
         # Resolve dependências
         ordered_modules = self.resolve_dependencies(selected_modules)
@@ -942,8 +789,7 @@ class ModuleCoordinator:
     def get_module_display_name(self, module: str) -> str:
         """Retorna nome amigável do módulo"""
         names = {
-            'basic': 'Config (E-mail, Cloudflare, Rede, Timezone)',
-            'hostname': 'Configuração de Hostname', 
+            'basic': 'Config (E-mail, Hostname, Cloudflare, Rede, Timezone)', 
             'docker': 'Instalação do Docker + Swarm',
             'traefik': 'Instalação do Traefik (Proxy Reverso)',
             'portainer': 'Instalação do Portainer (Gerenciador Docker)',
@@ -1088,7 +934,6 @@ class ModuleCoordinator:
         """Retorna mapeamento de módulos disponíveis"""
         return {
             'basic': ('Setup Básico', lambda: self.run_basic_setup()),
-            'hostname': ('Hostname', lambda: self.run_hostname_setup(self.args.hostname)),
             'docker': ('Docker', lambda: self.run_docker_setup()),
             'traefik': ('Traefik', lambda: self.run_traefik_setup(self.args.email)),
             'portainer': ('Portainer', lambda: self.run_portainer_setup(self.args.portainer_domain)),
@@ -1123,7 +968,7 @@ class ModuleCoordinator:
                 return False
         else:
             # Executa módulos principais (exceto cleanup)
-            main_modules = ['basic', 'hostname', 'docker', 'traefik', 'portainer', 'redis', 'postgres', 'pgvector', 'minio']
+            main_modules = ['basic', 'docker', 'traefik', 'portainer', 'redis', 'postgres', 'pgvector', 'minio']
             
             for module_key in main_modules:
                 if module_key in module_map:

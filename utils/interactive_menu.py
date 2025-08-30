@@ -35,10 +35,9 @@ class InteractiveMenu:
         self.selected_items = set()
         self.search_term = ""  # Para funcionalidade de pesquisa
         
-        # Lista de aplicações disponíveis (35 itens)
+        # Lista de aplicações disponíveis (34 itens)
         self.apps = [
-            {"id": "basic", "name": "Config (E-mail, Cloudflare, Rede, Timezone)", "category": "infra"},
-            {"id": "hostname", "name": "Configuração de Hostname", "category": "infra"},
+            {"id": "basic", "name": "Config (E-mail, Hostname, Cloudflare, Rede, Timezone)", "category": "infra"},
             {"id": "docker", "name": "Instalação do Docker + Swarm", "category": "infra"},
             {"id": "traefik", "name": "Instalação do Traefik (Proxy Reverso)", "category": "infra"},
             {"id": "portainer", "name": "Instalação do Portainer (Gerenciador Docker)", "category": "infra"},
@@ -546,8 +545,20 @@ class InteractiveMenu:
                 else:
                     print(f"\n{self.VERMELHO}❌ Instalação concluída com falhas.{self.RESET}")
                 
-                print(f"\n{self.VERDE}Obrigado por usar o Setup LivChat!{self.RESET}")
-                return success
+                # Perguntar se quer instalar algo mais seguindo padrão Enter/Ctrl+C
+                try:
+                    input(f"\n{self.BEGE}Pressione {self.VERDE}Enter{self.BEGE} para instalar mais aplicações ou {self.VERMELHO}Ctrl+C{self.BEGE} para encerrar...{self.RESET}")
+                    
+                    # Se chegou aqui, usuário pressionou Enter - voltar ao menu
+                    print(f"\n{self.BEGE}Retornando ao menu principal...{self.RESET}")
+                    # Limpa seleções para começar fresh
+                    self.selected_items.clear()
+                    self.selected_index = 0
+                    # continua o loop do while True do menu principal
+                    
+                except KeyboardInterrupt:
+                    print(f"\n{self.VERDE}Obrigado por usar o Setup LivChat!{self.RESET}")
+                    return success
             else:
                 # Usuário cancelou - volta ao menu
                 print(f"\n{self.BEGE}Voltando ao menu de seleção...{self.RESET}")
