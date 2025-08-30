@@ -49,6 +49,7 @@ docker node ls
 - **main.py**: Entry point that validates prerequisites and launches interactive menu
 - **config.py**: Global configurations, logging setup, and system constants
 - **requirements.txt**: Python dependencies (jinja2, requests)
+- **livchat-config.json**: Persistent configuration storage for system settings
 
 ### Module System
 The system uses a modular architecture with three main directories:
@@ -64,17 +65,20 @@ The system uses a modular architecture with three main directories:
    - Parametrized with variables like `domain`, `encryption_key`, credentials
 
 3. **utils/**: Core utilities and coordinators
-   - `interactive_menu.py`: Main menu interface
+   - `interactive_menu.py`: Main menu interface with TUI selection and post-installation options
    - `module_coordinator.py`: Module mapping and execution coordinator
+   - `config_manager.py`: Persistent configuration management (livchat-config.json)
    - `portainer_api.py`: Portainer API integration for stack deployment
    - `template_engine.py`: Jinja2 template processing
-   - `cloudflare_api.py`: DNS automation integration
+   - `cloudflare_api.py`: DNS automation integration with zone selection menu
 
 ### Key Classes
 - **BaseSetup**: Abstract base class for all setup modules with common functionality
+- **BasicSetup**: Unified setup module for system configuration (email, hostname, DNS, network, timezone)
+- **ConfigManager**: Handles persistent configuration in livchat-config.json
 - **PortainerAPI**: Handles Docker Swarm deployment via Portainer API
-- **InteractiveMenu**: Manages the interactive CLI menu system
-- **ModuleCoordinator**: Maps and executes setup modules
+- **InteractiveMenu**: Manages the interactive CLI menu system with TUI selection
+- **ModuleCoordinator**: Maps and executes setup modules, handles dependencies
 
 ## Development Patterns
 
@@ -92,13 +96,16 @@ To add a new service stack, create these files:
 - Follow naming convention: `<service>.yaml.j2`
 
 ### Deployment Flow
-1. Validate prerequisites (Docker, Swarm, network, databases)
-2. Collect user inputs (domain, email, passwords)
-3. Generate secure keys and passwords
-4. Optionally setup DNS via Cloudflare API
-5. Deploy stack via `PortainerAPI.deploy_service_complete()`
-6. Wait for services to be healthy
-7. Save credentials to `/root/dados_vps/dados_<service>`
+1. Interactive menu with TUI selection (multiple apps can be selected)
+2. Basic setup execution (system update, timezone, email, hostname, DNS, network)
+3. Validate prerequisites (Docker, Swarm, network, databases)
+4. Collect user inputs (domain, email, passwords) with suggestion pattern
+5. Generate secure keys and passwords
+6. Optionally setup DNS via Cloudflare API with interactive zone selection
+7. Deploy stack via `PortainerAPI.deploy_service_complete()`
+8. Wait for services to be healthy
+9. Save credentials to `/root/dados_vps/dados_<service>`
+10. Post-installation menu (continue with more apps or exit)
 
 ### Error Handling
 - All modules use structured logging via `config.setup_logging()`
@@ -113,6 +120,7 @@ To add a new service stack, create these files:
 - Credentials stored in `/root/dados_vps/dados_*` files
 - Auto-generated secure passwords and encryption keys
 - All web services deployed with HTTPS via Let's Encrypt
+- Persistent configuration stored securely in `/root/livchat-config.json`
 
 ### Database Sharing
 - Directus reuses Chatwoot's PostgreSQL database by design
@@ -120,7 +128,7 @@ To add a new service stack, create these files:
 - Simplifies infrastructure and reduces operational overhead
 
 ### Service Dependencies
-- Basic setup → Hostname → Docker+Swarm → Traefik → Portainer is the required sequence
+- Basic setup (includes hostname) → Docker+Swarm → Traefik → Portainer is the required sequence
 - Applications can be installed in any order after infrastructure is ready
 - PostgreSQL with PgVector is shared across multiple applications
 
@@ -135,11 +143,53 @@ To add a new service stack, create these files:
 - **Service health monitoring** via Portainer API
 
 ### Current Status
-- Infrastructure modules: Complete and production-ready
-- Database modules: Complete (Redis, PostgreSQL+PgVector, MinIO)
-- Applications: Chatwoot and Directus are production-ready
-- Evolution API v2: Available but in testing
-- Other applications: Available via menu but may need testing
+- **Module Count**: 34 total modules (reduced from 35 after hostname integration)
+- **Infrastructure modules**: Complete and production-ready (basic setup is unified)
+- **Database modules**: Complete (Redis, PostgreSQL+PgVector, MinIO)
+- **Applications**: Chatwoot and Directus are production-ready
+- **Evolution API v2**: Available but in testing
+- **Interactive Experience**: Full TUI menu with search, multi-selection, and post-install options
+- **Configuration Persistence**: All settings stored in livchat-config.json
+- **Other applications**: Available via menu but may need testing
+
+## Configuration Management
+
+### Persistent Storage
+- **Primary config**: `/root/livchat-config.json` - Main configuration file with all system settings
+- **Credentials backup**: `/root/dados_vps/dados_*` - Individual service credential files
+- **Automatic persistence**: All configuration changes are immediately saved to JSON
+
+### Configuration Structure
+```json
+{
+  "global": {
+    "hostname": "server-name",
+    "user_email": "user@domain.com", 
+    "default_subdomain": "dev",
+    "cloudflare_auto_dns": true,
+    "network_name": "livchat_network",
+    "installation_date": "2025-08-30T18:42:41.980103",
+    "version": "2.0",
+    "last_updated": "2025-08-30T18:53:04.274607"
+  },
+  "cloudflare": {
+    "api_token": "...",
+    "zone_id": "...", 
+    "zone_name": "example.com",
+    "enabled": true
+  },
+  "credentials": {},
+  "applications": {},
+  "dns_records": []
+}
+```
+
+### Input Pattern Standards
+- **Suggestion Pattern**: All user inputs follow `"Field (Enter for 'suggestion' ou digite outro valor): "`
+- **State Preservation**: Existing configurations are always suggested as defaults
+- **Validation**: Format validation before acceptance (hostname, email, etc.)
+- **Optional Fields**: Non-critical configurations can be skipped
+- **Consistency**: Same input pattern across all modules for uniform UX
 
 ## UI/Design Guidelines
 
@@ -257,19 +307,22 @@ box_line() {
 #### 4. Menu Design Patterns
 ```bash
 # Header with counter
-╭─ SETUP LIVCHAT ─────────────────────── Selecionados: 3/35 ─╮
-│ ↑/↓ navegar · → marcar (●/○) · Enter duplo executar · Esc voltar              │
+╭─ SETUP LIVCHAT ─────────────────────── Selecionados: 3/34 ─╮
+│ ↑/↓ navegar · → marcar (●/○) · Enter executar · Digite para pesquisar         │
 │                                                               │
 
 # Content area with proper alignment
-│ → ● [1] Configuração Básica do Sistema                       │
-│   ○ [2] Configuração de Hostname                             │
-│   ○ [3] Instalação do Docker + Swarm                         │
+│ → ● [1] Config (E-mail, Hostname, Cloudflare, Rede, Timezone)│
+│   ○ [2] Instalação do Docker + Swarm                         │
+│   ○ [3] Instalação do Traefik (Proxy Reverso)               │
 
 # Footer with legend
 │                                                               │
 ╰───────────────────────────────────────────────────────────────╯
 Legenda: ○ = não selecionado · ● = selecionado
+
+# Post-installation menu
+Pressione Enter para instalar mais aplicações ou Ctrl+C para encerrar...
 ```
 
 #### 5. Self-Contained Requirements
