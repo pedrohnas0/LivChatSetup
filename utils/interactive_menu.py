@@ -84,26 +84,41 @@ class InteractiveMenu:
         self.last_drawn_lines = 15  # Valor inicial
     
     def get_filtered_apps(self):
-        """Retorna lista filtrada de apps baseada no termo de pesquisa"""
+        """Retorna lista filtrada de apps baseada no termo de pesquisa (incluindo números)"""
         if not self.search_term:
             return self.apps
             
         filtered_apps = []
         search_lower = self.search_term.lower()
         
-        # Primeira prioridade: nome que começa com o termo
+        # Primeira prioridade: busca por número exato (ex: "1", "2", "10")
+        if search_lower.isdigit():
+            search_number = int(search_lower)
+            # Verifica se o número está dentro do range válido (1-34)
+            if 1 <= search_number <= len(self.apps):
+                target_app = self.apps[search_number - 1]  # Ajustar para índice 0
+                filtered_apps.append(target_app)
+                return filtered_apps
+        
+        # Segunda prioridade: nome que começa com o termo
         for app in self.apps:
             if app["name"].lower().startswith(search_lower):
                 filtered_apps.append(app)
         
-        # Segunda prioridade: nome que contém o termo (evitar duplicatas)
+        # Terceira prioridade: nome que contém o termo (evitar duplicatas)
         for app in self.apps:
             if search_lower in app["name"].lower() and app not in filtered_apps:
                 filtered_apps.append(app)
         
-        # Terceira prioridade: ID que contém o termo (evitar duplicatas)
+        # Quarta prioridade: ID que contém o termo (evitar duplicatas)
         for app in self.apps:
             if search_lower in app["id"].lower() and app not in filtered_apps:
+                filtered_apps.append(app)
+        
+        # Quinta prioridade: busca por número no início do nome (ex: "[1]", "[10]")
+        for i, app in enumerate(self.apps, 1):
+            app_number = str(i)
+            if search_lower in app_number and app not in filtered_apps:
                 filtered_apps.append(app)
                 
         return filtered_apps if filtered_apps else self.apps
