@@ -688,8 +688,11 @@ class ModuleCoordinator:
             print(f"{self.VERDE}✅ Rede Docker configurada: {self.BRANCO}{net}{self.RESET}")
             return True
     
-    def resolve_dependencies(self, selected_modules: List[str]) -> List[str]:
+    def resolve_dependencies(self, selected_modules: List[str], explicitly_selected: List[str] = None) -> List[str]:
         """Resolve dependências recursivamente e retorna lista ordenada de módulos para instalação"""
+        if explicitly_selected is None:
+            explicitly_selected = selected_modules.copy()
+            
         required_modules = set()
         
         def add_dependencies_recursive(module: str):
@@ -707,6 +710,13 @@ class ModuleCoordinator:
         for module in selected_modules:
             add_dependencies_recursive(module)
         
+        # Se 'basic' está nas dependências mas não foi explicitamente selecionado
+        # e as configurações básicas já estão completas, remove da lista
+        if 'basic' in required_modules and 'basic' not in explicitly_selected:
+            if self.is_basic_config_complete():
+                required_modules.remove('basic')
+                self.logger.info("Removendo 'basic' das dependências - configurações já completas")
+        
         # Ordena pelos módulos de infraestrutura primeiro
         ordered_modules = []
         
@@ -721,8 +731,30 @@ class ModuleCoordinator:
         
         return ordered_modules
     
+    def is_basic_config_complete(self) -> bool:
+        """Verifica se as configurações básicas essenciais já estão definidas"""
+        try:
+            # Verificar configurações essenciais
+            user_email = self.config.get_user_email()
+            network_name = self.config.get_network_name()
+            
+            # Se email e rede estão definidos, considera completo
+            if user_email and network_name:
+                self.logger.debug(f"Configuração básica já completa: email={user_email}, network={network_name}")
+                return True
+                
+            return False
+        except Exception as e:
+            self.logger.debug(f"Erro ao verificar configuração básica: {e}")
+            return False
+    
     def collect_global_config(self):
-        """Executa módulo de configuração global"""
+        """Executa módulo de configuração global apenas se necessário"""
+        # Se configuração básica já está completa, pula execução
+        if self.is_basic_config_complete():
+            self.logger.info("Configurações básicas já completas, pulando setup básico")
+            return True
+            
         basic_setup = BasicSetup(config_manager=self.config)
         return basic_setup.run()
     
@@ -737,25 +769,38 @@ class ModuleCoordinator:
         if selected_modules == ['cleanup']:
             return self.execute_module('cleanup')
         
-        # Coleta configurações globais primeiro (exceto para cleanup)
-        self.collect_global_config()
+        # Verificar se 'basic' foi selecionado explicitamente pelo usuário
+        basic_explicitly_selected = 'basic' in selected_modules
         
-        # Remove 'basic' dos selected_modules para evitar duplicação
-        # pois collect_global_config já executou o BasicSetup
-        if 'basic' in selected_modules:
+        # Se basic foi selecionado explicitamente, manter na lista para forçar execução
+        if not basic_explicitly_selected:
+            # Se basic não foi selecionado explicitamente, usar collect_global_config 
+            # que verifica se já está completo antes de executar
+            self.collect_global_config()
+        else:
+            # Basic foi selecionado explicitamente, remover da lista mas garantir execução
             selected_modules = [m for m in selected_modules if m != 'basic']
+            # Forçar execução do BasicSetup mesmo se já configurado (reconfiguração)
+            self.logger.info("Setup básico selecionado explicitamente - executando configuração")
+            basic_setup = BasicSetup(config_manager=self.config)
+            if not basic_setup.run():
+                self.logger.error("Falha na configuração básica explícita")
+                return False
         
         # Se não sobrou nenhum módulo além do basic, retorna sucesso
         if not selected_modules:
             self.logger.info("Configuração básica concluída. Nenhum módulo adicional selecionado.")
             return True
         
-        # Resolve dependências
-        ordered_modules = self.resolve_dependencies(selected_modules)
+        # Resolve dependências (precisa manter referência dos módulos originalmente selecionados)
+        original_selected = selected_modules.copy()
+        if basic_explicitly_selected:
+            original_selected.append('basic')  # Adiciona basic de volta para a lista de explicitamente selecionados
+        ordered_modules = self.resolve_dependencies(selected_modules, original_selected)
         
         self._print_section_box("📋 ORDEM DE INSTALAÇÃO", 50)
         for i, module in enumerate(ordered_modules, 1):
-            indicator = "🔹" if module in selected_modules else "📦"
+            indicator = "🔹" if module in original_selected else "📦"
             print(f"{i:2d}. {indicator} {self.get_module_display_name(module)}")
         
         print(f"\n📦 = Dependência automática")
@@ -782,7 +827,7 @@ class ModuleCoordinator:
                     break
         
         # Resumo final
-        self.show_installation_summary(ordered_modules, failed_modules, selected_modules)
+        self.show_installation_summary(ordered_modules, failed_modules, original_selected)
         
         return len(failed_modules) == 0
     
