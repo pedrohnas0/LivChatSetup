@@ -37,7 +37,7 @@ class InteractiveMenu:
         
         # Lista de aplicações disponíveis (35 itens)
         self.apps = [
-            {"id": "basic", "name": "Configuração Básica do Sistema", "category": "infra"},
+            {"id": "basic", "name": "Config (E-mail, Cloudflare, Rede, Timezone)", "category": "infra"},
             {"id": "hostname", "name": "Configuração de Hostname", "category": "infra"},
             {"id": "docker", "name": "Instalação do Docker + Swarm", "category": "infra"},
             {"id": "traefik", "name": "Instalação do Traefik (Proxy Reverso)", "category": "infra"},

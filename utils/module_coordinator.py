@@ -55,6 +55,67 @@ class ModuleCoordinator:
     CINZA = "\033[90m"          # Gray - Para borders e inactive items
     RESET = "\033[0m"           # Reset - Always close color sequences
     
+    def _get_terminal_width(self) -> int:
+        """Obtém largura do terminal de forma segura"""
+        try:
+            import shutil
+            return shutil.get_terminal_size().columns
+        except:
+            return 80  # Fallback
+    
+    def _print_box_title(self, title: str, width: int = None):
+        """Cria box com título seguindo padrão do projeto - versão melhorada"""
+        if width is None:
+            terminal_width = self._get_terminal_width()
+            width = min(80, terminal_width - 4)  # Margem de segurança
+        
+        # Remove códigos de cor para calcular tamanho real
+        import re
+        clean_title = re.sub(r'\033\[[0-9;]*m', '', title)
+        
+        line = "─" * (width - 1)
+        print(f"{self.CINZA}╭{line}╮{self.RESET}")
+        
+        # Centralização perfeita usando Python
+        content_width = width - 2  # Descontar as bordas │ │
+        centered_clean = clean_title.center(content_width)
+        
+        # Aplicar cor laranja ao título centralizado
+        colored_title = f"{self.LARANJA}{clean_title}{self.RESET}"
+        colored_line = centered_clean.replace(clean_title, colored_title)
+            
+        print(f"{self.CINZA}│{colored_line}{self.CINZA}│{self.RESET}")
+        print(f"{self.CINZA}╰{line}╯{self.RESET}")
+        
+    def _print_section_box(self, title: str, width: int = None):
+        """Cria box de seção menor - versão melhorada"""
+        if width is None:
+            terminal_width = self._get_terminal_width()
+            width = min(60, terminal_width - 10)  # Mais compacto
+        
+        # Remove códigos de cor para calcular tamanho real
+        import re
+        clean_title = re.sub(r'\033\[[0-9;]*m', '', title)
+        
+        line = "─" * (width - 1)
+        print(f"\n{self.CINZA}╭{line}╮{self.RESET}")
+        
+        # Centralização perfeita
+        content_width = width - 2
+        centered_clean = clean_title.center(content_width)
+        
+        # Aplicar cor bege ao título centralizado
+        colored_title = f"{self.BEGE}{clean_title}{self.RESET}"
+        colored_line = centered_clean.replace(clean_title, colored_title)
+            
+        print(f"{self.CINZA}│{colored_line}{self.CINZA}│{self.RESET}")
+        print(f"{self.CINZA}╰{line}╯{self.RESET}")
+    
+    def _clear_lines(self, count: int):
+        """Limpa linhas específicas em vez de limpar toda a tela"""
+        for _ in range(count):
+            print("\033[F\033[K", end="")  # Move cursor up e limpa linha
+    
     def __init__(self, args):
         self.args = args
         self.logger = setup_logging()
@@ -118,48 +179,118 @@ class ModuleCoordinator:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, old_settings)
     
     def select_cloudflare_zone(self, zones: List[Dict]) -> Optional[Dict]:
-        """Menu discreto para seleção de zona Cloudflare"""
+        """Menu com pesquisa para seleção de zona Cloudflare"""
         if not zones:
             return None
             
         selected_index = 0
+        search_term = ""
+        last_lines_printed = 0
+        first_run = True
+        
+        def get_filtered_zones():
+            """Retorna zonas filtradas pelo termo de pesquisa"""
+            if not search_term:
+                return zones
+                
+            filtered = []
+            search_lower = search_term.lower()
+            
+            # Primeira prioridade: nome que começa com o termo
+            for zone in zones:
+                if zone['name'].lower().startswith(search_lower):
+                    filtered.append(zone)
+            
+            # Segunda prioridade: contém o termo
+            for zone in zones:
+                if search_lower in zone['name'].lower() and zone not in filtered:
+                    filtered.append(zone)
+                    
+            return filtered
         
         while True:
-            # Limpa tela completamente para evitar sobreposição
-            print("\033[2J\033[H", end="")
+            # Limpa apenas as linhas do menu anterior (não o cabeçalho)
+            if not first_run and last_lines_printed > 0:
+                self._clear_lines(last_lines_printed)
+            first_run = False
             
-            # Header simples
-            print(f"\n🌐 SELEÇÃO DE ZONA CLOUDFLARE")
-            print("─" * 35)
-            print(f"{self.BEGE}↑/↓ navegar · Enter confirmar · Esc cancelar{self.RESET}")
+            # Contar linhas que vamos imprimir
+            lines_to_print = 0
+            
+            # Header com box (só na primeira vez)
+            if last_lines_printed == 0:
+                self._print_section_box("🌐 SELEÇÃO DE ZONA CLOUDFLARE")
+                lines_to_print += 3  # Box tem 3 linhas
+            
+            print(f"{self.BEGE}↑/↓ navegar · Enter confirmar · Digite para pesquisar · Esc cancelar{self.RESET}")
             print("")
+            lines_to_print += 2
             
-            # Lista todas as zonas de forma simples
-            for i, zone in enumerate(zones):
-                status_icon = "✅" if zone.get('status') == 'active' else "⚠️"
-                zone_name = zone['name']
+            # Filtrar zonas baseado na pesquisa
+            if search_term:
+                current_zones = get_filtered_zones()
                 
-                if i == selected_index:
-                    # Item selecionado - destacado
-                    print(f"  {self.BRANCO}→ [{i + 1:2d}] {status_icon} {zone_name}{self.RESET}")
-                else:
-                    # Item normal - discreto
-                    print(f"    [{i + 1:2d}] {status_icon} {zone_name}")
+                # Ajustar selected_index para zonas filtradas
+                if selected_index >= len(current_zones):
+                    selected_index = max(0, len(current_zones) - 1)
+                
+                # Mostrar linha de busca
+                search_display = f"🔍 Filtro: {search_term}"
+                result_count = len(current_zones)
+                status = f" ({result_count}/{len(zones)} resultados)"
+                print(f"{self.VERDE}{search_display}{status}{self.RESET}")
+                print("")
+                lines_to_print += 2
+            else:
+                current_zones = zones
             
-            # Indicador atual discreto
-            print(f"\n{self.BEGE}» Selecionado: {zones[selected_index]['name']}{self.RESET}")
+            # Lista zonas filtradas
+            if not current_zones:
+                print(f"{self.VERMELHO}Nenhuma zona encontrada com '{search_term}'{self.RESET}")
+                lines_to_print += 1
+            else:
+                for i, zone in enumerate(current_zones):
+                    status_icon = "✅" if zone.get('status') == 'active' else "⚠️"
+                    zone_name = zone['name']
+                    
+                    if i == selected_index:
+                        print(f"  {self.BRANCO}→ [{i + 1:2d}] {status_icon} {zone_name}{self.RESET}")
+                    else:
+                        print(f"    [{i + 1:2d}] {status_icon} {zone_name}")
+                    lines_to_print += 1
+                
+                # Status da seleção
+                if current_zones:
+                    current_zone = current_zones[selected_index]
+                    print(f"\n{self.BEGE}» Selecionado: {current_zone['name']}{self.RESET}")
+                    lines_to_print += 2
             
-            # Ler tecla
+            # Atualizar contador de linhas para próxima iteração
+            last_lines_printed = lines_to_print - (3 if last_lines_printed == 0 else 0)  # Não recontar o box
+            
+            # Captura input
             key = self.get_key()
             
-            if key == 'UP':
-                selected_index = (selected_index - 1) % len(zones)
-            elif key == 'DOWN':
-                selected_index = (selected_index + 1) % len(zones)
-            elif key == 'ENTER':
-                return zones[selected_index]
-            elif key == 'ESC':
-                return None
+            if key == 'ESC':
+                if search_term:
+                    # Limpa pesquisa primeiro
+                    search_term = ""
+                    selected_index = 0
+                else:
+                    return None
+            elif key == 'UP' and current_zones:
+                selected_index = (selected_index - 1) % len(current_zones)
+            elif key == 'DOWN' and current_zones:
+                selected_index = (selected_index + 1) % len(current_zones)
+            elif key == 'ENTER' and current_zones:
+                return current_zones[selected_index]
+            elif key == '\x7f' or key == '\b':  # Backspace
+                if search_term:
+                    search_term = search_term[:-1]
+                    selected_index = 0
+            elif len(key) == 1 and (key.isalnum() or key in ' -_.'):
+                search_term += key.lower()
+                selected_index = 0
         
     def _load_persisted_configs(self):
         """Carrega configurações persistidas do JSON"""
@@ -224,7 +355,7 @@ class ModuleCoordinator:
             self.args.network_name = network_name
             return True
             
-        print("\n--- Definir Rede Docker ---")
+        self._print_section_box("🌐 DEFINIR REDE DOCKER", 40)
         if self.run_network_setup():
             return True
             
@@ -552,26 +683,33 @@ class ModuleCoordinator:
 
     def run_network_setup(self) -> bool:
         """Define ou altera o nome da rede Docker (network_name) de forma interativa"""
-        print(f"\n🌐 DEFINIR REDE DOCKER")
-        print("─" * 30)
+        self._print_section_box("🌐 DEFINIR REDE DOCKER", 50)
+        
         atual = getattr(self.args, 'network_name', None)
         if atual:
-            print(f"Rede atual: {atual}")
+            print(f"{self.BEGE}Rede atual: {self.BRANCO}{atual}{self.RESET}")
+            print("")
         
         while True:
-            net = self.get_user_input("Nome da rede Docker", suggestion="livchat_network")
+            prompt = "Nome da rede Docker (Enter para 'livchat_network' ou digite outro valor)"
+            net = self.get_user_input(prompt, suggestion="livchat_network")
             if not net:
-                print("Nome da rede é obrigatório. Tente novamente.")
+                print(f"{self.VERMELHO}Nome da rede é obrigatório. Tente novamente.{self.RESET}")
                 continue
+                
             # Validação simples: letras, números, hífen e underline, 2-50 chars
             import re
             if not re.match(r'^[A-Za-z0-9_-]{2,50}$', net):
-                print("Nome inválido. Use apenas letras, números, '-', '_' e entre 2 e 50 caracteres.")
+                print(f"{self.VERMELHO}Nome inválido.{self.RESET} Use apenas letras, números, '-', '_' e entre 2 e 50 caracteres.")
                 continue
+                
             self.args.network_name = net
             self.logger.info(f"Rede Docker definida: {net}")
+            
             # Persiste no ConfigManager
             self.config.set_network_name(net)
+            
+            print(f"{self.VERDE}✅ Rede Docker configurada: {self.BRANCO}{net}{self.RESET}")
             return True
     
     def resolve_dependencies(self, selected_modules: List[str]) -> List[str]:
@@ -609,8 +747,7 @@ class ModuleCoordinator:
     
     def collect_global_config(self):
         """Coleta configurações globais uma única vez"""
-        print(f"\n🚀 CONFIGURAÇÃO GLOBAL LIVCHAT")
-        print("─" * 50)
+        self._print_box_title("🚀 CONFIGURAÇÃO GLOBAL LIVCHAT")
         
         # Email padrão do usuário
         current_email = self.config.get_user_email()
@@ -621,10 +758,25 @@ class ModuleCoordinator:
         else:
             print(f"📧 Email padrão: {current_email}")
         
-        # Perguntar sobre gerenciamento DNS
-        if not self.config.is_cloudflare_auto_dns_enabled():
-            print(f"\n🌐 GERENCIAMENTO DNS AUTOMÁTICO")
-            print("─" * 35)
+        # Verificar configuração DNS existente
+        if self.config.is_cloudflare_auto_dns_enabled():
+            # Mostrar configuração atual
+            cloudflare_config = self.config.get_cloudflare_config()
+            zone_name = cloudflare_config.get('zone_name', 'N/A')
+            # Buscar subdomínio na configuração global
+            subdomain = self.config.get_default_subdomain() or 'nenhum'
+            
+            self._print_section_box("🌐 CLOUDFLARE CONFIGURADO")
+            print(f"{self.VERDE}✅ DNS automático ativo{self.RESET}")
+            print(f"{self.BEGE}Zona: {self.BRANCO}{zone_name}{self.RESET}")
+            print(f"{self.BEGE}Subdomínio padrão: {self.BRANCO}{subdomain}{self.RESET}")
+            
+            reconfigure = input(f"\n{self.BEGE}{self.VERDE}Enter{self.RESET}{self.BEGE} para manter ou digite {self.VERDE}'s'{self.RESET}{self.BEGE} para reconfigurar:{self.RESET} ").strip().lower()
+            if reconfigure == 's':
+                self.setup_cloudflare_dns()
+        else:
+            # Configurar pela primeira vez
+            self._print_section_box("🌐 GERENCIAMENTO DNS AUTOMÁTICO", 50)
             print("O sistema pode gerenciar automaticamente os registros DNS via Cloudflare.")
             print("🔒 Suas credenciais ficam seguras e armazenadas apenas localmente.")
             
@@ -640,8 +792,7 @@ class ModuleCoordinator:
     
     def setup_cloudflare_dns(self):
         """Configura DNS automático Cloudflare com detecção automática de zonas"""
-        print(f"\n🌐 CONFIGURAÇÃO CLOUDFLARE DNS")
-        print("─" * 40)
+        self._print_section_box("🌐 CONFIGURAÇÃO CLOUDFLARE DNS")
         
         # Email do Cloudflare (pode ser diferente do email padrão)
         current_email = self.config.get_user_email()
@@ -726,8 +877,7 @@ class ModuleCoordinator:
         # Resolve dependências
         ordered_modules = self.resolve_dependencies(selected_modules)
         
-        print(f"\n📋 ORDEM DE INSTALAÇÃO")
-        print("─" * 30)
+        self._print_section_box("📋 ORDEM DE INSTALAÇÃO", 50)
         for i, module in enumerate(ordered_modules, 1):
             indicator = "🔹" if module in selected_modules else "📦"
             print(f"{i:2d}. {indicator} {self.get_module_display_name(module)}")
@@ -735,15 +885,13 @@ class ModuleCoordinator:
         print(f"\n📦 = Dependência automática")
         print(f"🔹 = Selecionado pelo usuário")
         
-        input("\nPressione Enter para continuar ou Ctrl+C para cancelar...")
+        input(f"\n{self.BEGE}Pressione {self.VERDE}Enter{self.BEGE} para continuar ou {self.VERMELHO}Ctrl+C{self.BEGE} para cancelar...{self.RESET}")
         
         # Executa módulos em ordem
         failed_modules = []
         
         for i, module in enumerate(ordered_modules, 1):
-            print(f"\n{'='*60}")
-            print(f"📋 Executando módulo {i}/{len(ordered_modules)}: {self.get_module_display_name(module)}")
-            print(f"{'='*60}")
+            self._print_box_title(f"📋 Executando módulo {i}/{len(ordered_modules)}: {self.get_module_display_name(module)}", 80)
             
             success = self.execute_module(module)
             
@@ -765,7 +913,7 @@ class ModuleCoordinator:
     def get_module_display_name(self, module: str) -> str:
         """Retorna nome amigável do módulo"""
         names = {
-            'basic': 'Configuração Básica do Sistema',
+            'basic': 'Config (E-mail, Cloudflare, Rede, Timezone)',
             'hostname': 'Configuração de Hostname', 
             'docker': 'Instalação do Docker + Swarm',
             'traefik': 'Instalação do Traefik (Proxy Reverso)',
@@ -790,9 +938,7 @@ class ModuleCoordinator:
         """Exibe resumo da instalação"""
         total_time = (datetime.now() - self.start_time).total_seconds()
         
-        print(f"\n{'='*60}")
-        print(f"📊 RESUMO DA INSTALAÇÃO")
-        print(f"{'='*60}")
+        self._print_box_title("📊 RESUMO DA INSTALAÇÃO", 80)
         print(f"⏱️  Tempo total: {total_time:.1f}s")
         print(f"📦 Módulos instalados: {len(all_modules) - len(failed_modules)}/{len(all_modules)}")
         print(f"🎯 Selecionados pelo usuário: {len(selected_modules)}")
@@ -814,7 +960,6 @@ class ModuleCoordinator:
             print(f"   • Network Docker: {config_summary['network_name']}")
             
         print(f"\n📁 Configurações salvas em: /root/livchat-config.json")
-        print(f"{'='*60}")
     
     def run_redis_setup(self) -> bool:
         """Executa instalação do Redis"""
