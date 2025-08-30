@@ -34,7 +34,14 @@ Sistema modular de configuração de servidor Linux com Docker Swarm, Traefik, P
 ### Execução rápida (one-liner)
 
 ```bash
+# Padrão - sem logs no console
 bash <(curl -sSL setup.livchat.ai)
+
+# Com logs de erro
+bash <(curl -sSL setup.livchat.ai) --quiet
+
+# Com todos os logs (debug)
+bash <(curl -sSL setup.livchat.ai) --verbose
 ```
 
 ### Instalação manual
@@ -45,8 +52,20 @@ git clone https://github.com/pedrohnas0/LivChatSetup.git
 cd LivChatSetup
 
 # Execute o sistema (sempre inicia pelo menu)
-python3 main.py
+sudo python3 main.py           # Padrão - sem logs no console
+sudo python3 main.py --quiet   # Apenas ERROR e CRITICAL
+sudo python3 main.py --verbose # Todos os logs (DEBUG)
 ```
+
+### 📊 Controle de Logs
+
+O sistema possui **3 modos de log**:
+
+- **Padrão**: Console silencioso, logs salvos em arquivo
+- **--quiet**: Console mostra apenas erros críticos
+- **--verbose**: Console mostra debug completo
+
+**Arquivo de log**: Sempre salva tudo em `/var/log/setup_inicial.log` (rotação 10MB, 5 backups)
 
 ### Menu Interativo
 

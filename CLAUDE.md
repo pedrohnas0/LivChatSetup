@@ -14,6 +14,16 @@ sudo python3 main.py
 
 # One-liner installation from web
 bash <(curl -sSL setup.livchat.ai)
+
+# Log control modes (local execution)
+sudo python3 main.py           # Padrão - sem logs no console
+sudo python3 main.py --quiet   # Apenas ERROR e CRITICAL
+sudo python3 main.py --verbose # Todos os logs (DEBUG)
+
+# Log control modes (web installation)
+bash <(curl -sSL setup.livchat.ai)           # Padrão - sem logs no console
+bash <(curl -sSL setup.livchat.ai) --quiet   # Apenas ERROR e CRITICAL  
+bash <(curl -sSL setup.livchat.ai) --verbose # Todos os logs (DEBUG)
 ```
 
 ### Development Commands
@@ -115,10 +125,14 @@ To add a new service stack, create these files:
 - PostgreSQL with PgVector is shared across multiple applications
 
 ### Logging and Monitoring
-- Structured logging with timestamps and log levels
-- File rotation (10MB, 5 backups)
-- Console output with color coding
-- Service health monitoring via Portainer API
+- **Structured logging** with timestamps and log levels (`HH:MM:SS.mmm | LEVEL | message`)
+- **File rotation** (10MB, 5 backups) at `/var/log/setup_inicial.log`
+- **Console output** with color coding (configurable via CLI arguments)
+- **Log levels**: 3 modes available
+  - **Padrão** (default): Console silencioso, arquivo recebe tudo
+  - **--quiet**: Console mostra ERROR/CRITICAL, arquivo recebe tudo  
+  - **--verbose**: Console mostra DEBUG completo, arquivo recebe tudo
+- **Service health monitoring** via Portainer API
 
 ### Current Status
 - Infrastructure modules: Complete and production-ready
