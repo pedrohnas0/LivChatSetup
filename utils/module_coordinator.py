@@ -747,6 +747,35 @@ class ModuleCoordinator:
     
     def collect_global_config(self):
         """Coleta configurações globais uma única vez"""
+        # ASCII Art para CONFIG
+        terminal_width = self._get_terminal_width()
+        box_width = min(101, terminal_width - 4)
+        line = "─" * (box_width - 1)
+        
+        print(f"{self.CINZA}╭{line}╮{self.RESET}")
+        print(f"{self.CINZA}│{' ' * (box_width - 1)}{self.CINZA}│{self.RESET}")
+        
+        # Centralizando o ASCII art CONFIG
+        ascii_lines = [
+            "██████╗ ██████╗ ███╗   ██╗███████╗██╗ ██████╗ ",
+            "██╔════╝██╔═══██╗████╗  ██║██╔════╝██║██╔════╝ ",
+            "██║     ██║   ██║██╔██╗ ██║█████╗  ██║██║  ███╗",
+            "██║     ██║   ██║██║╚██╗██║██╔══╝  ██║██║   ██║",
+            "╚██████╗╚██████╔╝██║ ╚████║██║     ██║╚██████╔╝",
+            " ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝     ╚═╝ ╚═════╝ "
+        ]
+        
+        for line_content in ascii_lines:
+            content_width = box_width - 1
+            centered_content = line_content.center(content_width)
+            colored_content = f"{self.LARANJA}{line_content}{self.RESET}"
+            colored_line = centered_content.replace(line_content, colored_content)
+            print(f"{self.CINZA}│{colored_line}{self.CINZA}│{self.RESET}")
+        
+        print(f"{self.CINZA}│{' ' * (box_width - 1)}{self.CINZA}│{self.RESET}")
+        print(f"{self.CINZA}╰{line}╯{self.RESET}")
+        print()
+        
         self._print_box_title("🚀 CONFIGURAÇÃO GLOBAL LIVCHAT")
         
         # Email padrão do usuário

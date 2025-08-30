@@ -143,14 +143,14 @@ To add a new service stack, create these files:
 
 ## UI/Design Guidelines
 
-The project follows a consistent visual design pattern across all interfaces (bash setup script and Python TUI menu). These guidelines ensure a professional, cohesive user experience.
+The project follows a consistent visual design pattern across all interfaces (bash setup script and Python TUI menu). These guidelines ensure a professional, cohesive user experience using modern Unicode box drawing and intelligent Python-based layout systems.
 
 ### Color Palette
 
 Standard ANSI color codes used throughout the project:
 
 ```bash
-# Primary colors
+# Primary colors (Bash)
 laranja="\e[38;5;173m"    # Orange - For ASCII art and highlights
 verde="\e[32m"            # Green - For success states and selected items
 branco="\e[97m"           # Bright white - For focus states and headings
@@ -159,6 +159,17 @@ vermelho="\e[91m"         # Red - For errors and warnings
 cinza="\e[90m"            # Gray - For borders and inactive items
 azul="\e[34m"             # Blue - For compatibility (legacy)
 reset="\e[0m"             # Reset - Always close color sequences
+```
+
+```python
+# Python equivalents (module_coordinator.py)
+LARANJA = "\033[38;5;173m"  # Orange - For ASCII art and highlights
+VERDE = "\033[32m"          # Green - For success states and selected items
+BRANCO = "\033[97m"         # Bright white - For focus states and headings
+BEGE = "\033[93m"           # Beige - For informational text and legends
+VERMELHO = "\033[91m"       # Red - For errors and warnings
+CINZA = "\033[90m"          # Gray - For borders and inactive items
+RESET = "\033[0m"           # Reset - Always close color sequences
 ```
 
 ### Box Drawing Functions
