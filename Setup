@@ -345,7 +345,8 @@ echo ""
 sleep 2
 
 # Executa o LivChat Setup automaticamente
-python3 main.py
+# Repassa argumentos recebidos pelo script bash para o Python
+python3 main.py "$@"
 
 ## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##
 ##                                         LIVCHAT SETUP                                       ##
