@@ -61,11 +61,15 @@ class CleanupSetup(BaseSetup):
                 for stack in stacks:
                     if stack.strip():
                         self.logger.info(f"Removendo stack: {stack}")
-                        if not self.run_command(
-                            f"docker stack rm {stack}",
+                        # Comando mais robusto para remoção de stack
+                        success = self.run_command(
+                            f"docker stack rm {stack} 2>/dev/null || true",
                             f"remoção da stack {stack}"
-                        ):
-                            self.logger.warning(f"Falha ao remover stack {stack}")
+                        )
+                        if not success:
+                            # Tenta forçar remoção de serviços individuais
+                            self.logger.warning(f"Falha ao remover stack {stack}, tentando remoção forçada")
+                            self._force_remove_stack_services(stack)
                 
                 # Aguarda remoção completa com polling
                 self.logger.info("Aguardando remoção completa das stacks")
@@ -157,11 +161,19 @@ class CleanupSetup(BaseSetup):
             try:
                 if volume in all_vols:
                     self.logger.info(f"Removendo volume: {volume}")
-                    if not self.run_command(
-                        f"docker volume rm {volume}",
+                    # Comando mais robusto para remoção de volume
+                    success = self.run_command(
+                        f"docker volume rm {volume} --force 2>/dev/null || true",
                         f"remoção do volume {volume}"
-                    ):
-                        self.logger.warning(f"Falha ao remover volume {volume}")
+                    )
+                    if not success:
+                        # Tenta remoção após aguardar containers pararem
+                        self.logger.warning(f"Falha ao remover volume {volume}, tentando após limpeza")
+                        time.sleep(2)
+                        self.run_command(
+                            f"docker volume rm {volume} --force 2>/dev/null || true",
+                            f"remoção forçada do volume {volume}"
+                        )
                 else:
                     self.logger.debug(f"Volume {volume} não encontrado")
             except Exception as e:
@@ -186,11 +198,13 @@ class CleanupSetup(BaseSetup):
                 for net in networks:
                     if net not in default_networks:
                         self.logger.info(f"Removendo rede: {net}")
-                        if not self.run_command(
-                            f"docker network rm {net}",
+                        # Comando mais robusto para remoção de rede
+                        success = self.run_command(
+                            f"docker network rm {net} 2>/dev/null || true",
                             f"remoção da rede {net}"
-                        ):
-                            self.logger.warning(f"Falha ao remover rede {net}")
+                        )
+                        if not success:
+                            self.logger.warning(f"Falha ao remover rede {net} (pode estar em uso)")
             else:
                 self.logger.warning("Falha ao listar redes")
         except Exception as e:
@@ -214,6 +228,29 @@ class CleanupSetup(BaseSetup):
                 self.logger.warning(f"Falha na {description}")
         
         return True
+    
+    def _force_remove_stack_services(self, stack_name: str) -> None:
+        """Força remoção de serviços de uma stack específica"""
+        try:
+            # Lista serviços da stack
+            result = subprocess.run(
+                f"docker service ls --filter label=com.docker.stack.namespace={stack_name} --format '{{{{.ID}}}}'",
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=20
+            )
+            
+            if result.returncode == 0 and result.stdout.strip():
+                service_ids = result.stdout.strip().split('\n')
+                for service_id in service_ids:
+                    if service_id.strip():
+                        self.run_command(
+                            f"docker service rm {service_id.strip()} 2>/dev/null || true",
+                            f"remoção forçada do serviço {service_id.strip()}"
+                        )
+        except Exception as e:
+            self.logger.debug(f"Erro na remoção forçada de serviços da stack {stack_name}: {e}")
     
     def leave_swarm(self) -> bool:
         """Sai do Docker Swarm"""
@@ -274,24 +311,49 @@ class CleanupSetup(BaseSetup):
     
     def _get_confirmation(self) -> bool:
         """Solicita confirmação do usuário para limpeza"""
-        print(f"\n⚠️  ATENÇÃO: LIMPEZA COMPLETA DO AMBIENTE")
-        print("─" * 50)
-        print("Esta operação irá remover:")
-        print("- TODAS as stacks do Docker Swarm")
-        print("- TODOS os volumes do projeto")
-        print("- TODAS as redes do projeto")
-        print("- Sairá do Docker Swarm")
-        print("- Limpará containers, imagens e volumes não utilizados")
-        print("\nEsta ação É IRREVERSÍVEL!")
+        # Cores ANSI definidas como variáveis
+        cinza = "\033[90m"
+        vermelho = "\033[91m"  
+        bege = "\033[93m"
+        laranja = "\033[38;5;173m"
+        verde = "\033[32m"
+        branco = "\033[97m"
+        reset = "\033[0m"
+        
+        print("")
+        
+        # Caixa do título
+        print(f"{cinza}╭─────────────────────────────────────────────────────────────────────────────────────────────────────╮{reset}")
+        print(f"{cinza}│{reset}                                                                                                     {cinza}│{reset}")
+        print(f"{cinza}│{reset}                     {laranja} ██████╗██╗     ███████╗ █████╗ ███╗   ██╗██╗   ██╗██████╗ {reset}                     {cinza}│{reset}")
+        print(f"{cinza}│{reset}                     {laranja}██╔════╝██║     ██╔════╝██╔══██╗████╗  ██║██║   ██║██╔══██╗{reset}                     {cinza}│{reset}")
+        print(f"{cinza}│{reset}                     {laranja}██║     ██║     █████╗  ███████║██╔██╗ ██║██║   ██║██████╔╝{reset}                     {cinza}│{reset}")
+        print(f"{cinza}│{reset}                     {laranja}██║     ██║     ██╔══╝  ██╔══██║██║╚██╗██║██║   ██║██╔═══╝ {reset}                     {cinza}│{reset}")
+        print(f"{cinza}│{reset}                     {laranja}╚██████╗███████╗███████╗██║  ██║██║ ╚████║╚██████╔╝██║     {reset}                     {cinza}│{reset}")
+        print(f"{cinza}│{reset}                     {laranja} ╚═════╝╚══════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝     {reset}                     {cinza}│{reset}")
+        print(f"{cinza}│{reset}                                                                                                     {cinza}│{reset}")
+        print(f"{cinza}╰─────────────────────────────────────────────────────────────────────────────────────────────────────╯{reset}")
+        print("")
+        
+        # Detalhes da operação
+        print(f"{vermelho}⚠️  ATENÇÃO: Esta operação é IRREVERSÍVEL!{reset}")
+        print("")
+        print(f"{bege}Esta limpeza irá:{reset}")
+        print(f"  {vermelho}•{reset} Remover TODAS as stacks do Docker Swarm")
+        print(f"  {vermelho}•{reset} Remover TODOS os volumes do projeto")
+        print(f"  {vermelho}•{reset} Remover TODAS as redes personalizadas")
+        print(f"  {vermelho}•{reset} Sair do Docker Swarm")
+        print(f"  {vermelho}•{reset} Limpar containers, imagens e volumes não utilizados")
+        print("")
         
         while True:
-            confirm = input("\nDigite 'CONFIRMO' para prosseguir ou 'cancelar' para abortar: ").strip()
+            confirm = input(f"Digite '{verde}CONFIRMO{reset}' para prosseguir ou '{vermelho}cancelar{reset}' para abortar: ").strip()
             if confirm == 'CONFIRMO':
                 return True
             elif confirm.lower() in ['cancelar', 'cancel', 'n', 'no']:
                 return False
             else:
-                print("Resposta inválida. Digite 'CONFIRMO' ou 'cancelar'.")
+                print(f"{vermelho}Resposta inválida.{reset} Digite '{verde}CONFIRMO{reset}' ou '{vermelho}cancelar{reset}'.")
     
     def run(self) -> bool:
         """Executa a limpeza completa"""
@@ -305,9 +367,10 @@ class CleanupSetup(BaseSetup):
         if not self.validate_prerequisites():
             return False
         
-        # Sequência de limpeza
+        # Sequência de limpeza mais robusta
         steps = [
             ("Remoção de stacks", self.remove_stacks),
+            ("Pausa para finalização", lambda: time.sleep(5) or True),  # Aguarda containers pararem
             ("Remoção de volumes", self.remove_volumes),
             ("Remoção de redes", self.remove_networks),
             ("Saída do Swarm", self.leave_swarm),
