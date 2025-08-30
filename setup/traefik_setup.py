@@ -9,14 +9,16 @@ import os
 import time
 from .base_setup import BaseSetup
 from utils.template_engine import TemplateEngine
+from utils.config_manager import ConfigManager
 
 class TraefikSetup(BaseSetup):
     """Instalação e configuração do Traefik"""
     
-    def __init__(self, email: str = None, network_name: str = None):
+    def __init__(self, email: str = None, network_name: str = None, config_manager: ConfigManager = None):
         super().__init__("Instalação do Traefik")
         self.email = email
         self.network_name = network_name
+        self.config = config_manager or ConfigManager()
         
     def validate_prerequisites(self) -> bool:
         """Valida pré-requisitos"""
@@ -48,14 +50,30 @@ class TraefikSetup(BaseSetup):
         return True
     
     def _get_email_input(self) -> str:
-        """Solicita email do usuário interativamente"""
-        print("\n=== Configuração do Traefik ===")
+        """Solicita email do usuário interativamente com sugestão do ConfigManager"""
+        print(f"\n🔐 CONFIGURAÇÃO TRAEFIK - SSL")
+        print("─" * 35)
+        
+        # Busca email padrão do ConfigManager
+        default_email = self.config.get_user_email()
+        
         while True:
-            email = input("Digite seu email para certificados SSL: ").strip()
+            if default_email:
+                prompt = f"Email para certificados SSL (Enter para '{default_email}' ou digite outro)"
+            else:
+                prompt = "Digite seu email para certificados SSL"
+                
+            email = input(f"{prompt}: ").strip()
+            
+            # Se não digitou nada e tem padrão, usa o padrão
+            if not email and default_email:
+                return default_email
+            
+            # Valida email
             if email and '@' in email and '.' in email:
                 return email
             else:
-                print("Email inválido! Digite um email válido.")
+                print("❌ Email inválido! Digite um email válido.")
     
     def is_docker_running(self) -> bool:
         """Verifica se Docker está rodando"""

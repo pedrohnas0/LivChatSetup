@@ -7,12 +7,14 @@ from .base_setup import BaseSetup
 from utils.portainer_api import PortainerAPI
 from setup.pgvector_setup import PgVectorSetup
 from utils.cloudflare_api import get_cloudflare_api
+from utils.config_manager import ConfigManager
 
 class ChatwootSetup(BaseSetup):
-    def __init__(self, network_name: str = None):
+    def __init__(self, network_name: str = None, config_manager: ConfigManager = None):
         super().__init__("Instalação do Chatwoot")
         self.portainer = PortainerAPI()
         self.network_name = network_name
+        self.config = config_manager or ConfigManager()
 
     def validate_prerequisites(self) -> bool:
         """Valida pré-requisitos"""
@@ -78,8 +80,14 @@ class ChatwootSetup(BaseSetup):
             return False
 
     def _get_pgvector_password(self) -> str:
-        """Obtém senha do PgVector"""
+        """Obtém senha do PgVector via ConfigManager"""
         try:
+            # Primeiro tenta do ConfigManager
+            pgvector_creds = self.config.get_app_credentials("pgvector")
+            if pgvector_creds.get("password"):
+                return pgvector_creds["password"]
+            
+            # Fallback para arquivo antigo
             with open("/root/dados_vps/dados_pgvector", 'r') as f:
                 for line in f:
                     if line.startswith("Senha:"):
@@ -89,16 +97,36 @@ class ChatwootSetup(BaseSetup):
         return ""
 
     def collect_user_inputs(self) -> dict:
-        """Coleta informações do usuário e retorna dicionário com todas as variáveis"""
-        print("\n=== Configuração do Chatwoot ===")
+        """Coleta informações do usuário com sugestões automáticas"""
+        print(f"\n💬 CONFIGURAÇÃO CHATWOOT")
+        print("─" * 30)
         
-        # Coleta inputs
-        domain = input("Digite o domínio para o Chatwoot (ex: chatwoot.seudominio.com): ").strip()
-        smtp_email = input("Digite o Email para SMTP (ex: contato@seudominio.com): ").strip()
-        smtp_user = input(f"Digite o Usuário para SMTP (ex: {smtp_email}): ").strip()
-        smtp_password = input("Digite a Senha SMTP do Email: ").strip()
-        smtp_host = input("Digite o Host SMTP do Email (ex: smtp.hostinger.com): ").strip()
-        smtp_port = input("Digite a porta SMTP do Email (ex: 465): ").strip()
+        # Domínio sugerido
+        suggested_domain = self.config.suggest_domain("chatwoot")
+        domain = input(f"Domínio (Enter para '{suggested_domain}' ou digite outro): ").strip()
+        if not domain:
+            domain = suggested_domain
+        
+        # Email e senha sugeridos
+        suggested_email, suggested_password = self.config.get_suggested_email_and_password("chatwoot")
+        
+        smtp_email = input(f"Email SMTP (Enter para '{suggested_email}' ou digite outro): ").strip()
+        if not smtp_email:
+            smtp_email = suggested_email
+            
+        smtp_user = input(f"Usuário SMTP (Enter para '{smtp_email}' ou digite outro): ").strip()
+        if not smtp_user:
+            smtp_user = smtp_email
+            
+        print(f"\n⚠️  Senha SMTP sugerida (64 caracteres seguros): {suggested_password}")
+        smtp_password = input("Digite a senha SMTP (Enter para usar a sugerida): ").strip()
+        if not smtp_password:
+            smtp_password = suggested_password
+            
+        smtp_host = input("Host SMTP (ex: smtp.hostinger.com): ").strip()
+        smtp_port = input("Porta SMTP (Enter para '465' ou digite outra): ").strip()
+        if not smtp_port:
+            smtp_port = "465"
         
         # Dados computados
         try:
@@ -110,21 +138,28 @@ class ChatwootSetup(BaseSetup):
         smtp_domain = smtp_email.split("@")[1] if "@" in smtp_email else ""
         smtp_ssl = "true" if smtp_port == "465" else "false"
         
-        # Confirmação
-        print(f"\n=== Configuração do Chatwoot ===")
-        print(f"Domínio: {domain}")
-        print(f"Email SMTP: {smtp_email}")
-        print(f"Host SMTP: {smtp_host}:{smtp_port}")
+        # Confirmação com mais detalhes
+        print(f"\n📋 RESUMO DA CONFIGURAÇÃO")
+        print("─" * 30)
+        print(f"🌍 Domínio: {domain}")
+        print(f"📧 Email SMTP: {smtp_email}")
+        print(f"📮 Host SMTP: {smtp_host}:{smtp_port}")
         
+        # Avisar sobre DNS automático
+        if self.config.is_cloudflare_auto_dns_enabled():
+            print(f"✅ DNS será configurado automaticamente via Cloudflare")
+        else:
+            print(f"⚠️  Você precisará configurar o DNS manualmente")
+            
         confirm = input("\nConfirma as configurações? (s/N): ").strip().lower()
         if confirm not in ['s', 'sim', 'y', 'yes']:
             return None
         
-        # Gerar secrets
-        encryption_key = self.portainer.generate_hex_key(16)
+        # Gerar secrets usando ConfigManager
+        encryption_key = self.config.generate_secure_password(32)  # 32 chars para encryption key
         pgvector_password = self._get_pgvector_password()
         
-        return {
+        config_data = {
             'domain': domain,
             'company_name': company_name,
             'encryption_key': encryption_key,
@@ -138,6 +173,24 @@ class ChatwootSetup(BaseSetup):
             'pgvector_password': pgvector_password,
             'network_name': self.network_name
         }
+        
+        # Salva configuração no ConfigManager
+        self.config.save_app_config("chatwoot", {
+            "domain": domain,
+            "smtp_host": smtp_host,
+            "smtp_port": smtp_port,
+            "company_name": company_name
+        })
+        
+        # Salva credenciais no ConfigManager
+        self.config.save_app_credentials("chatwoot", {
+            "smtp_email": smtp_email,
+            "smtp_user": smtp_user,
+            "smtp_password": smtp_password,
+            "encryption_key": encryption_key
+        })
+        
+        return config_data
 
     def create_database(self) -> bool:
         """Cria banco de dados no PgVector"""
@@ -166,13 +219,19 @@ class ChatwootSetup(BaseSetup):
             return False
 
     def setup_dns_records(self, domain: str) -> bool:
-        """Configura registros DNS via Cloudflare (padrão similar ao Directus/N8N)"""
-        self.logger.info("Configurando registros DNS via Cloudflare...")
-        cf = get_cloudflare_api(self.logger)
+        """Configura registros DNS via Cloudflare integrado ao ConfigManager"""
+        if not self.config.is_cloudflare_auto_dns_enabled():
+            self.logger.info("DNS automático não configurado, pulando...")
+            return True
+            
+        self.logger.info("🌐 Configurando registros DNS via Cloudflare...")
+        cf = get_cloudflare_api(self.config, self.logger)
         if not cf:
-            self.logger.error("Falha ao inicializar Cloudflare API")
+            self.logger.error("❌ Falha ao inicializar Cloudflare API")
             return False
-        return cf.setup_dns_for_service("Chatwoot", [domain])
+            
+        # Usa novo método integrado
+        return cf.create_app_dns_record("chatwoot", domain)
 
     def run(self):
         """Executa instalação do Chatwoot usando métodos genéricos do PortainerAPI"""

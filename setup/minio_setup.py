@@ -82,7 +82,8 @@ class MinioSetup(BaseSetup):
 
     def get_user_input(self):
         """Solicita informações do usuário para MinIO"""
-        print("\n=== Configuração do MinIO ===")
+        print(f"\n🗄️  CONFIGURAÇÃO MINIO")
+        print("─" * 25)
         
         # Solicita domínio do MinIO
         while True:

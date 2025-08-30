@@ -54,7 +54,8 @@ class PassboltSetup(BaseSetup):
 
     # --- Coleta inputs ---
     def collect_user_inputs(self):
-        print("\n=== Configuração do Passbolt ===")
+        print(f"\n🔐 CONFIGURAÇÃO PASSBOLT")
+        print("─" * 30)
 
         # Domínio Passbolt
         while True:
@@ -121,7 +122,8 @@ class PassboltSetup(BaseSetup):
         ).strip() or admin_email
 
         # Confirmação
-        print("\n=== Resumo ===")
+        print(f"\n📋 RESUMO")
+        print("─" * 15)
         print(f"Domínio: {domain}")
         print(f"SMTP: {smtp_host}:{smtp_port} ({'TLS' if smtp_tls == 'true' else 'no TLS'})")
         print(f"Admin: {admin_first} {admin_last} <{admin_email}>")

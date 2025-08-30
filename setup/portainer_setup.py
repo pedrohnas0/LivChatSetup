@@ -10,14 +10,16 @@ import time
 from .base_setup import BaseSetup
 from utils.template_engine import TemplateEngine
 from utils.cloudflare_api import get_cloudflare_api
+from utils.config_manager import ConfigManager
 
 class PortainerSetup(BaseSetup):
     """Instalação e configuração do Portainer"""
     
-    def __init__(self, domain: str = None, network_name: str = None):
+    def __init__(self, domain: str = None, network_name: str = None, config_manager: ConfigManager = None):
         super().__init__("Instalação do Portainer")
         self.domain = domain
         self.network_name = network_name
+        self.config = config_manager or ConfigManager()
         
     def validate_prerequisites(self) -> bool:
         """Valida pré-requisitos"""
@@ -51,7 +53,7 @@ class PortainerSetup(BaseSetup):
         """Cria ou garante registro DNS A para o domínio do Portainer no Cloudflare."""
         try:
             self.logger.info("🌐 Configurando DNS do Portainer no Cloudflare (registro A)...")
-            cf = get_cloudflare_api(self.logger)
+            cf = get_cloudflare_api(self.logger, self.config)
             if not cf:
                 self.logger.error("❌ API Cloudflare não configurada")
                 return False
@@ -70,14 +72,30 @@ class PortainerSetup(BaseSetup):
             return False
     
     def _get_domain_input(self) -> str:
-        """Solicita domínio do usuário interativamente"""
-        print("\n=== Configuração do Portainer ===")
+        """Solicita domínio do usuário interativamente com sugestão inteligente"""
+        print(f"\n🐳 CONFIGURAÇÃO PORTAINER")
+        print("─" * 30)
+        
+        # Gera sugestão baseada na configuração DNS
+        suggested_domain = self.config.suggest_domain("ptn")
+        
         while True:
-            domain = input("Digite o domínio para o Portainer (ex: ptn.seudominio.com): ").strip()
+            if suggested_domain:
+                prompt = f"Domínio do Portainer (Enter para '{suggested_domain}' ou digite outro)"
+            else:
+                prompt = "Digite o domínio para o Portainer (ex: ptn.seudominio.com)"
+                
+            domain = input(f"{prompt}: ").strip()
+            
+            # Se não digitou nada e tem sugestão, usa a sugestão
+            if not domain and suggested_domain:
+                return suggested_domain
+            
+            # Valida domínio
             if domain and '.' in domain:
                 return domain
             else:
-                print("Domínio inválido! Digite um domínio válido.")
+                print("❌ Domínio inválido! Digite um domínio válido.")
     
     def is_docker_running(self) -> bool:
         """Verifica se Docker está rodando"""
@@ -281,12 +299,118 @@ class PortainerSetup(BaseSetup):
         if not self.verify_installation():
             return False
         
+        # Salva configurações do Portainer no ConfigManager
+        self.config.save_app_config("portainer", {
+            "domain": self.domain,
+            "url": f"https://{self.domain}",
+            "network_name": self.network_name,
+            "installed": True,
+            "installation_method": "auto"
+        })
+        
         duration = self.get_duration()
         self.logger.info(f"Instalação do Portainer concluída ({duration:.2f}s)")
-        self.logger.info(f"Acesse: https://{self.domain}")
+        
+        # Sugere credenciais que o usuário deve usar
+        suggested_credentials = self._suggest_portainer_credentials()
+        if not suggested_credentials:
+            self.logger.error("❌ Erro ao gerar credenciais sugeridas.")
+            return False
+        
+        # Sessão de destaque de sucesso com as credenciais sugeridas
+        self._show_success_summary_with_suggested_credentials(suggested_credentials)
+        
+        # Confirma se o usuário criou a conta com as credenciais sugeridas
+        if not self._confirm_account_creation_with_suggested_credentials(suggested_credentials):
+            self.logger.error("❌ Criação da conta não confirmada. Configure manualmente antes de continuar.")
+            return False
+        
+        self.logger.info(f"✅ Acesso ao Portainer confirmado!")
+        self.logger.info(f"Configuração salva no ConfigManager: {self.domain}")
         self.log_step_complete("Instalação do Portainer")
         
         return True
+    
+    def _suggest_portainer_credentials(self) -> dict:
+        """Sugere credenciais para o Portainer (email padrão + senha gerada)"""
+        # Obtém email padrão ou pergunta
+        default_email = self.config.get_user_email()
+        if not default_email:
+            print(f"\n📧 EMAIL PADRÃO NECESSÁRIO")
+            print("─" * 30)
+            default_email = input("Digite seu email para usar como padrão: ").strip()
+            if default_email:
+                self.config.set_user_email(default_email)
+        
+        # Gera senha segura de 64 caracteres
+        suggested_password = self.config.generate_secure_password(64)
+        
+        return {
+            "username": default_email,
+            "password": suggested_password
+        }
+    
+    def _show_success_summary_with_suggested_credentials(self, credentials: dict):
+        """Exibe sessão de sucesso com credenciais que o usuário DEVE usar"""
+        print(f"\n" + "=" * 70)
+        print(f"🎉 PORTAINER INSTALADO COM SUCESSO!")
+        print(f"=" * 70)
+        print(f"")
+        print(f"🌐 URL de Acesso: https://{self.domain}")
+        print(f"")
+        print(f"👤 CREDENCIAIS PARA CRIAR A CONTA ADMINISTRADOR:")
+        print(f"   • Email/Usuário: {credentials['username']}")
+        print(f"   • Senha: {credentials['password']}")
+        print(f"")
+        print(f"📝 INSTRUÇÕES:")
+        print(f"   1. Acesse https://{self.domain}")
+        print(f"   2. Crie o primeiro usuário com os dados EXATOS acima")
+        print(f"   3. Use EXATAMENTE o email e senha mostrados")
+        print(f"   4. Confirme que conseguiu fazer login")
+        print(f"")
+        print(f"⚠️  IMPORTANTE: Use exatamente esses dados para a automação funcionar!")
+        print(f"=" * 70)
+        print(f"")
+    
+    def _confirm_account_creation_with_suggested_credentials(self, credentials: dict) -> bool:
+        """Confirma se o usuário criou a conta com as credenciais sugeridas"""
+        while True:
+            print(f"🔍 CONFIRMAÇÃO DE CRIAÇÃO DA CONTA")
+            print(f"─" * 40)
+            print(f"")
+            print(f"Confirme que você:")
+            print(f"✓ Acessou https://{self.domain}")
+            print(f"✓ Criou conta com email: {credentials['username']}")
+            print(f"✓ Usou a senha exata mostrada acima")
+            print(f"✓ Conseguiu fazer login normalmente")
+            print(f"")
+            
+            resposta = input("Você criou a conta com os dados exatos mostrados? (s/n): ").strip().lower()
+            
+            if resposta in ['s', 'sim', 'y', 'yes']:
+                # Salva as credenciais no ConfigManager
+                self.config.save_app_credentials("portainer", {
+                    "url": f"https://{self.domain}",
+                    "username": credentials['username'],
+                    "password": credentials['password']
+                })
+                print(f"✅ Credenciais confirmadas e salvas!")
+                return True
+            elif resposta in ['n', 'nao', 'não', 'no']:
+                print(f"\n❌ Conta não criada com as credenciais corretas.")
+                print(f"🔧 Você DEVE usar exatamente:")
+                print(f"   • Email: {credentials['username']}")
+                print(f"   • Senha: {credentials['password']}")
+                print(f"")
+                print(f"🔄 Tente novamente ou cancele a instalação.")
+                retry = input("Tentar novamente? (s/n): ").strip().lower()
+                if retry not in ['s', 'sim', 'y', 'yes']:
+                    return False
+                continue
+            else:
+                print("❌ Responda com 's' (sim) ou 'n' (não)")
+                continue
+    
 
 def main():
     """Função principal para teste do módulo"""

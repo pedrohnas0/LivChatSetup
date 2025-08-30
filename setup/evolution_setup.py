@@ -114,7 +114,8 @@ class EvolutionSetup(BaseSetup):
 
     def collect_user_inputs(self):
         """Coleta informações do usuário"""
-        print("\n=== Configuração da Evolution API v2 ===")
+        print(f"\n🚀 CONFIGURAÇÃO EVOLUTION API V2")
+        print("─" * 40)
 
         # Domínio da Evolution API
         while True:
@@ -124,7 +125,8 @@ class EvolutionSetup(BaseSetup):
             print("❌ Domínio é obrigatório!")
 
         # Confirmação
-        print("\n=== Resumo ===")
+        print(f"\n📋 RESUMO")
+        print("─" * 15)
         print(f"Domínio: {domain}")
         confirm = input("\nConfirma as configurações? (s/N): ").strip().lower()
         if confirm not in ["s", "sim", "y", "yes"]:

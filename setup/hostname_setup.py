@@ -37,7 +37,8 @@ class HostnameSetup(BaseSetup):
     
     def _get_hostname_input(self) -> str:
         """Solicita hostname do usuário interativamente"""
-        print("\n=== Configuração de Hostname ===")
+        print(f"\n🖥️  CONFIGURAÇÃO HOSTNAME")
+        print("─" * 30)
         while True:
             hostname = input("Digite o hostname do servidor: ").strip()
             if hostname:

@@ -274,7 +274,8 @@ class CleanupSetup(BaseSetup):
     
     def _get_confirmation(self) -> bool:
         """Solicita confirmação do usuário para limpeza"""
-        print("\n=== ATENÇÃO: LIMPEZA COMPLETA DO AMBIENTE ===")
+        print(f"\n⚠️  ATENÇÃO: LIMPEZA COMPLETA DO AMBIENTE")
+        print("─" * 50)
         print("Esta operação irá remover:")
         print("- TODAS as stacks do Docker Swarm")
         print("- TODOS os volumes do projeto")

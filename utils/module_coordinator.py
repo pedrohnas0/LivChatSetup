@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 """
-Coordenador de Módulos
-Simplifica a execução e gerenciamento dos módulos de setup
+Coordenador de Módulos - Refatorado v2.0
+Suporta seleção múltipla, dependências automáticas e configurações centralizadas
 """
 
 import sys
 import os
+import termios
+import tty
 from datetime import datetime
+from typing import List, Dict, Set, Optional, Tuple
 
 # Adiciona o diretório raiz ao path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import setup_logging
+from utils.config_manager import ConfigManager
 from setup.basic_setup import SystemSetup as BasicSetup
 from setup.hostname_setup import HostnameSetup
 from setup.docker_setup import DockerSetup
@@ -32,31 +36,165 @@ from setup.passbolt_setup import PassboltSetup
 from setup.evolution_setup import EvolutionSetup
 
 class ModuleCoordinator:
-    """Coordenador simplificado dos módulos de setup"""
+    """Coordenador avançado dos módulos de setup - v2.0
+    
+    Suporta:
+    - Seleção múltipla de aplicações
+    - Resolução automática de dependências  
+    - Configurações centralizadas em JSON
+    - Gerenciamento DNS automático
+    - Sugestões de senhas e configurações
+    """
+    
+    # Cores para menus (seguindo padrão do projeto)
+    LARANJA = "\033[38;5;173m"  # Orange - Para ASCII art e highlights
+    VERDE = "\033[32m"          # Green - Para success states e selected items
+    BRANCO = "\033[97m"         # Bright white - Para focus states e headings
+    BEGE = "\033[93m"           # Beige - Para informational text e legends
+    VERMELHO = "\033[91m"       # Red - Para errors e warnings
+    CINZA = "\033[90m"          # Gray - Para borders e inactive items
+    RESET = "\033[0m"           # Reset - Always close color sequences
     
     def __init__(self, args):
         self.args = args
         self.logger = setup_logging()
         self.start_time = datetime.now()
-        # Carrega network_name persistido, se existir
-        persisted = self._load_network_name()
-        if persisted and not getattr(self.args, 'network_name', None):
-            self.args.network_name = persisted
-            self.logger.info(f"Rede Docker carregada do cache: {persisted}")
-        # Carrega hostname persistido, se existir
-        h_persisted = self._load_hostname()
-        if h_persisted and not getattr(self.args, 'hostname', None):
-            self.args.hostname = h_persisted
-            self.logger.info(f"Hostname carregado do cache: {h_persisted}")
+        self.config = ConfigManager()
         
-    def get_user_input(self, prompt: str, required: bool = False) -> str:
-        """Coleta entrada do usuário de forma interativa"""
+        # Carrega configurações do JSON centralizado
+        self._load_persisted_configs()
+        
+        # Mapeamento de dependências
+        self.dependencies = {
+            'docker': ['basic'],
+            'traefik': ['docker'],
+            'portainer': ['traefik'],  # Portainer precisa do Traefik para SSL
+            'redis': ['portainer'],     # Todos os serviços via API precisam do Portainer
+            'postgres': ['portainer'],  # Todos os serviços via API precisam do Portainer
+            'pgvector': ['portainer'],  # Todos os serviços via API precisam do Portainer
+            'minio': ['portainer'],     # Todos os serviços via API precisam do Portainer
+            'chatwoot': ['traefik', 'pgvector'],
+            'directus': ['traefik', 'pgvector'], 
+            'n8n': ['traefik', 'postgres'],
+            'grafana': ['traefik'],
+            'passbolt': ['traefik', 'postgres'],
+            'evolution': ['traefik', 'postgres', 'redis'],
+            'gowa': ['traefik'],
+            'livchatbridge': ['traefik']
+        }
+        
+        # Ordem de instalação (infraestrutura primeiro)
+        self.install_order = [
+            'basic', 'hostname', 'docker', 'traefik', 'portainer',
+            'redis', 'postgres', 'pgvector', 'minio'
+        ]
+    
+    def get_key(self):
+        """Lê uma tecla do terminal (utilitário para menus scrollable)"""
+        old_settings = termios.tcgetattr(sys.stdin.fileno())
         try:
-            value = input(f"{prompt}: ").strip()
+            tty.setcbreak(sys.stdin.fileno())
+            key = sys.stdin.read(1)
+            
+            # Detectar setas (sequências escape)
+            if key == '\x1b':  # ESC
+                try:
+                    key2 = sys.stdin.read(1)
+                    if key2 == '[':
+                        key3 = sys.stdin.read(1)
+                        if key3 == 'A':  # Seta cima
+                            return 'UP'
+                        elif key3 == 'B':  # Seta baixo
+                            return 'DOWN'
+                    return 'ESC'
+                except:
+                    return 'ESC'
+            
+            if ord(key) == 10 or ord(key) == 13:  # Enter
+                return 'ENTER'
+                
+            return key
+        finally:
+            termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, old_settings)
+    
+    def select_cloudflare_zone(self, zones: List[Dict]) -> Optional[Dict]:
+        """Menu discreto para seleção de zona Cloudflare"""
+        if not zones:
+            return None
+            
+        selected_index = 0
+        
+        while True:
+            # Limpa tela completamente para evitar sobreposição
+            print("\033[2J\033[H", end="")
+            
+            # Header simples
+            print(f"\n🌐 SELEÇÃO DE ZONA CLOUDFLARE")
+            print("─" * 35)
+            print(f"{self.BEGE}↑/↓ navegar · Enter confirmar · Esc cancelar{self.RESET}")
+            print("")
+            
+            # Lista todas as zonas de forma simples
+            for i, zone in enumerate(zones):
+                status_icon = "✅" if zone.get('status') == 'active' else "⚠️"
+                zone_name = zone['name']
+                
+                if i == selected_index:
+                    # Item selecionado - destacado
+                    print(f"  {self.BRANCO}→ [{i + 1:2d}] {status_icon} {zone_name}{self.RESET}")
+                else:
+                    # Item normal - discreto
+                    print(f"    [{i + 1:2d}] {status_icon} {zone_name}")
+            
+            # Indicador atual discreto
+            print(f"\n{self.BEGE}» Selecionado: {zones[selected_index]['name']}{self.RESET}")
+            
+            # Ler tecla
+            key = self.get_key()
+            
+            if key == 'UP':
+                selected_index = (selected_index - 1) % len(zones)
+            elif key == 'DOWN':
+                selected_index = (selected_index + 1) % len(zones)
+            elif key == 'ENTER':
+                return zones[selected_index]
+            elif key == 'ESC':
+                return None
+        
+    def _load_persisted_configs(self):
+        """Carrega configurações persistidas do JSON"""
+        # Carrega network_name
+        network_name = self.config.get_network_name()
+        if network_name and not getattr(self.args, 'network_name', None):
+            self.args.network_name = network_name
+            self.logger.info(f"Rede Docker carregada: {network_name}")
+            
+        # Carrega hostname  
+        hostname = self.config.get_hostname()
+        if hostname and not getattr(self.args, 'hostname', None):
+            self.args.hostname = hostname
+            self.logger.info(f"Hostname carregado: {hostname}")
+    
+    def get_user_input(self, prompt: str, required: bool = False, suggestion: str = None) -> str:
+        """Coleta entrada do usuário com sugestão opcional"""
+        try:
+            if suggestion:
+                full_prompt = f"{prompt} (Enter para '{suggestion}' ou digite outro valor)"
+            else:
+                full_prompt = prompt
+                
+            value = input(f"{full_prompt}: ").strip()
+            
+            # Se não digitou nada e há sugestão, usa a sugestão
+            if not value and suggestion:
+                return suggestion
+                
             if required and not value:
                 self.logger.warning("Valor obrigatório não fornecido")
                 return None
+                
             return value if value else None
+            
         except KeyboardInterrupt:
             print("\nOperação cancelada pelo usuário.")
             return None
@@ -77,20 +215,19 @@ class ModuleCoordinator:
             return False
 
     def ensure_network_name(self) -> bool:
-        """Garante que self.args.network_name esteja definido, carregando persistido ou perguntando uma única vez"""
-        # 1) Já definido via args
+        """Garante que network_name esteja definido"""
         if getattr(self.args, 'network_name', None):
             return True
-        # 2) Tentar carregar persistido
-        persisted = self._load_network_name()
-        if persisted:
-            self.args.network_name = persisted
-            self.logger.info(f"Rede Docker carregada do cache: {persisted}")
+            
+        network_name = self.config.get_network_name()
+        if network_name:
+            self.args.network_name = network_name
             return True
-        # 3) Perguntar uma única vez e salvar
+            
         print("\n--- Definir Rede Docker ---")
         if self.run_network_setup():
             return True
+            
         self.logger.warning("Nome da rede não definido.")
         return False
 
@@ -248,7 +385,8 @@ class ModuleCoordinator:
                 # Email será solicitado pelo próprio módulo se não fornecido
                 traefik_setup = TraefikSetup(
                     email=kwargs.get('email') or self.args.email,
-                    network_name=self.args.network_name
+                    network_name=self.args.network_name,
+                    config_manager=self.config
                 )
                 return traefik_setup.run()
             
@@ -259,7 +397,8 @@ class ModuleCoordinator:
                     return True
                 portainer_setup = PortainerSetup(
                     kwargs.get('portainer_domain') or self.args.portainer_domain,
-                    network_name=self.args.network_name
+                    network_name=self.args.network_name,
+                    config_manager=self.config
                 )
                 return portainer_setup.run()
             
@@ -295,7 +434,7 @@ class ModuleCoordinator:
                 if not self.ensure_network_name():
                     self.logger.warning("Nome da rede não definido. Pulando instalação do Chatwoot.")
                     return True
-                chatwoot_setup = ChatwootSetup(network_name=self.args.network_name)
+                chatwoot_setup = ChatwootSetup(network_name=self.args.network_name, config_manager=self.config)
                 return chatwoot_setup.run()
             
             elif module_name == 'directus':
@@ -390,7 +529,7 @@ class ModuleCoordinator:
                 return True
             self.logger.info(f"Email configurado: {email}")
         
-        traefik_setup = TraefikSetup(email=email, network_name=self.args.network_name)
+        traefik_setup = TraefikSetup(email=email, network_name=self.args.network_name, config_manager=self.config)
         return traefik_setup.run()
     
     def run_portainer_setup(self, domain: str) -> bool:
@@ -408,17 +547,19 @@ class ModuleCoordinator:
                 return True
             self.logger.info(f"Domínio Portainer configurado: {domain}")
         
-        portainer_setup = PortainerSetup(domain=domain, network_name=self.args.network_name)
+        portainer_setup = PortainerSetup(domain=domain, network_name=self.args.network_name, config_manager=self.config)
         return portainer_setup.run()
 
     def run_network_setup(self) -> bool:
         """Define ou altera o nome da rede Docker (network_name) de forma interativa"""
-        print("\n=== Definir Rede Docker (network_name) ===")
+        print(f"\n🌐 DEFINIR REDE DOCKER")
+        print("─" * 30)
         atual = getattr(self.args, 'network_name', None)
         if atual:
             print(f"Rede atual: {atual}")
+        
         while True:
-            net = self.get_user_input("Digite o nome da rede Docker (ex: my_stack_net)")
+            net = self.get_user_input("Nome da rede Docker", suggestion="livchat_network")
             if not net:
                 print("Nome da rede é obrigatório. Tente novamente.")
                 continue
@@ -429,12 +570,251 @@ class ModuleCoordinator:
                 continue
             self.args.network_name = net
             self.logger.info(f"Rede Docker definida: {net}")
-            # Persiste imediatamente para todas as stacks
-            self._save_network_name(net)
+            # Persiste no ConfigManager
+            self.config.set_network_name(net)
+            return True
+    
+    def resolve_dependencies(self, selected_modules: List[str]) -> List[str]:
+        """Resolve dependências recursivamente e retorna lista ordenada de módulos para instalação"""
+        required_modules = set()
+        
+        def add_dependencies_recursive(module: str):
+            """Adiciona dependências de forma recursiva"""
+            if module in required_modules:
+                return
+            required_modules.add(module)
+            
+            # Adiciona dependências do módulo atual
+            deps = self.dependencies.get(module, [])
+            for dep in deps:
+                add_dependencies_recursive(dep)
+        
+        # Resolve dependências recursivamente para cada módulo selecionado
+        for module in selected_modules:
+            add_dependencies_recursive(module)
+        
+        # Ordena pelos módulos de infraestrutura primeiro
+        ordered_modules = []
+        
+        # Primeiro, adiciona módulos de infraestrutura na ordem
+        for module in self.install_order:
+            if module in required_modules:
+                ordered_modules.append(module)
+                required_modules.remove(module)
+        
+        # Adiciona módulos restantes (aplicações)
+        ordered_modules.extend(sorted(required_modules))
+        
+        return ordered_modules
+    
+    def collect_global_config(self):
+        """Coleta configurações globais uma única vez"""
+        print(f"\n🚀 CONFIGURAÇÃO GLOBAL LIVCHAT")
+        print("─" * 50)
+        
+        # Email padrão do usuário
+        current_email = self.config.get_user_email()
+        if not current_email:
+            email = self.get_user_input("Digite seu email padrão (será usado para SSL e apps)", required=True)
+            if email:
+                self.config.set_user_email(email)
+        else:
+            print(f"📧 Email padrão: {current_email}")
+        
+        # Perguntar sobre gerenciamento DNS
+        if not self.config.is_cloudflare_auto_dns_enabled():
+            print(f"\n🌐 GERENCIAMENTO DNS AUTOMÁTICO")
+            print("─" * 35)
+            print("O sistema pode gerenciar automaticamente os registros DNS via Cloudflare.")
+            print("🔒 Suas credenciais ficam seguras e armazenadas apenas localmente.")
+            
+            dns_choice = input("\nDeseja configurar gerenciamento automático de DNS? (s/N): ").strip().lower()
+            
+            if dns_choice == 's':
+                self.setup_cloudflare_dns()
+            else:
+                print("Prosseguindo sem gerenciamento DNS automático.")
+        
+        # Network name
+        self.ensure_network_name()
+    
+    def setup_cloudflare_dns(self):
+        """Configura DNS automático Cloudflare com detecção automática de zonas"""
+        print(f"\n🌐 CONFIGURAÇÃO CLOUDFLARE DNS")
+        print("─" * 40)
+        
+        # Email do Cloudflare (pode ser diferente do email padrão)
+        current_email = self.config.get_user_email()
+        cf_email_suggestion = f"Enter para '{current_email}' ou digite outro email" if current_email else "Digite o email da sua conta Cloudflare"
+        cf_email = self.get_user_input(f"Email Cloudflare ({cf_email_suggestion})")
+        if not cf_email and current_email:
+            cf_email = current_email
+        
+        if not cf_email:
+            print("Email é obrigatório. Configuração cancelada.")
+            return False
+        
+        # API Key do Cloudflare
+        api_key = self.get_user_input("Digite sua Cloudflare API Key", required=True)
+        
+        if not api_key:
+            print("API Key é obrigatória. Configuração cancelada.")
+            return False
+        
+        # Cria instância temporária para listar zonas
+        from utils.cloudflare_api import CloudflareAPI
+        temp_cf = CloudflareAPI(logger=self.logger)
+        temp_cf.api_key = api_key
+        temp_cf.email = cf_email
+        temp_cf.headers = {
+            "X-Auth-Email": cf_email,
+            "X-Auth-Key": api_key,
+            "Content-Type": "application/json"
+        }
+        
+        # Lista zonas disponíveis
+        print("\n🔍 Buscando suas zonas DNS...")
+        zones = temp_cf.list_zones()
+        if not zones:
+            print("❌ Falha ao conectar com Cloudflare ou nenhuma zona encontrada")
+            print("Verifique seu email e API Key e tente novamente.")
+            return False
+        
+        # Usar menu scrollable para seleção de zona
+        print(f"\n📋 {len(zones)} zonas encontradas - Use ↑/↓ para navegar:")
+        selected_zone = self.select_cloudflare_zone(zones)
+        
+        if not selected_zone:
+            print("\n❌ Configuração cancelada pelo usuário.")
+            return False
+            
+        zone_name = selected_zone['name']
+        zone_id = selected_zone['id']
+        print(f"\n✅ Zona selecionada: {zone_name}")
+        
+        # Subdomínio padrão (opcional)
+        subdomain = self.get_user_input("Digite um subdomínio padrão (ex: dev, Enter para sem subdomínio)")
+        
+        if subdomain:
+            self.config.set_default_subdomain(subdomain)
+            print(f"✅ Subdomínio padrão configurado: {subdomain}")
+            print(f"   Exemplo de domínios: ptn.{subdomain}.{zone_name}")
+        else:
+            print(f"✅ Sem subdomínio padrão (domínios diretos)")
+            print(f"   Exemplo de domínios: ptn.{zone_name}")
+        
+        # Converte API Key para Token format no ConfigManager (compatibilidade)
+        self.config.set_cloudflare_config(api_key, zone_id, zone_name)
+        self.config.set_cloudflare_auto_dns(True)
+        
+        print("✅ Cloudflare configurado com sucesso!")
+        return True
+    
+    def run_multiple_modules(self, selected_modules: List[str]) -> bool:
+        """Executa múltiplos módulos com resolução de dependências"""
+        if not selected_modules:
+            self.logger.warning("Nenhum módulo selecionado")
             return True
         
-        # Não alcançável
-        # return False
+        # Se for apenas cleanup, não precisa de configurações globais
+        if selected_modules == ['cleanup']:
+            return self.execute_module('cleanup')
+        
+        # Coleta configurações globais primeiro (exceto para cleanup)
+        self.collect_global_config()
+        
+        # Resolve dependências
+        ordered_modules = self.resolve_dependencies(selected_modules)
+        
+        print(f"\n📋 ORDEM DE INSTALAÇÃO")
+        print("─" * 30)
+        for i, module in enumerate(ordered_modules, 1):
+            indicator = "🔹" if module in selected_modules else "📦"
+            print(f"{i:2d}. {indicator} {self.get_module_display_name(module)}")
+        
+        print(f"\n📦 = Dependência automática")
+        print(f"🔹 = Selecionado pelo usuário")
+        
+        input("\nPressione Enter para continuar ou Ctrl+C para cancelar...")
+        
+        # Executa módulos em ordem
+        failed_modules = []
+        
+        for i, module in enumerate(ordered_modules, 1):
+            print(f"\n{'='*60}")
+            print(f"📋 Executando módulo {i}/{len(ordered_modules)}: {self.get_module_display_name(module)}")
+            print(f"{'='*60}")
+            
+            success = self.execute_module(module)
+            
+            if success:
+                self.logger.info(f"✅ Módulo {module} concluído com sucesso")
+            else:
+                self.logger.error(f"❌ Falha no módulo {module}")
+                failed_modules.append(module)
+                
+                if self.args.stop_on_error:
+                    self.logger.error(f"Parando execução devido a falha em: {module}")
+                    break
+        
+        # Resumo final
+        self.show_installation_summary(ordered_modules, failed_modules, selected_modules)
+        
+        return len(failed_modules) == 0
+    
+    def get_module_display_name(self, module: str) -> str:
+        """Retorna nome amigável do módulo"""
+        names = {
+            'basic': 'Configuração Básica do Sistema',
+            'hostname': 'Configuração de Hostname', 
+            'docker': 'Instalação do Docker + Swarm',
+            'traefik': 'Instalação do Traefik (Proxy Reverso)',
+            'portainer': 'Instalação do Portainer (Gerenciador Docker)',
+            'redis': 'Redis (Cache/Session Store)',
+            'postgres': 'PostgreSQL (Banco Relacional)',
+            'pgvector': 'PostgreSQL + PgVector (Banco Vetorial)',
+            'minio': 'MinIO (S3 Compatible Storage)',
+            'chatwoot': 'Chatwoot (Customer Support Platform)',
+            'directus': 'Directus (Headless CMS)',
+            'n8n': 'N8N (Workflow Automation)',
+            'grafana': 'Grafana (Stack de Monitoramento)',
+            'gowa': 'GOWA (WhatsApp API Multi Device)',
+            'livchatbridge': 'LivChatBridge (Webhook Connector)',
+            'passbolt': 'Passbolt (Password Manager)',
+            'evolution': 'Evolution API v2 (WhatsApp API)',
+            'cleanup': 'Limpeza Completa do Ambiente'
+        }
+        return names.get(module, module.title())
+    
+    def show_installation_summary(self, all_modules: List[str], failed_modules: List[str], selected_modules: List[str]):
+        """Exibe resumo da instalação"""
+        total_time = (datetime.now() - self.start_time).total_seconds()
+        
+        print(f"\n{'='*60}")
+        print(f"📊 RESUMO DA INSTALAÇÃO")
+        print(f"{'='*60}")
+        print(f"⏱️  Tempo total: {total_time:.1f}s")
+        print(f"📦 Módulos instalados: {len(all_modules) - len(failed_modules)}/{len(all_modules)}")
+        print(f"🎯 Selecionados pelo usuário: {len(selected_modules)}")
+        print(f"🔗 Dependências automáticas: {len(all_modules) - len(selected_modules)}")
+        
+        if failed_modules:
+            print(f"\n❌ MÓDULOS COM FALHA:")
+            for module in failed_modules:
+                print(f"   • {self.get_module_display_name(module)}")
+        else:
+            print(f"\n✅ TODOS OS MÓDULOS INSTALADOS COM SUCESSO!")
+            
+        # Exibe informações úteis
+        config_summary = self.config.get_summary()
+        if config_summary["total_apps"] > 0:
+            print(f"\n🔧 CONFIGURAÇÕES:")
+            print(f"   • Aplicações configuradas: {config_summary['total_apps']}")
+            print(f"   • DNS automático: {'✅' if config_summary['auto_dns_enabled'] else '❌'}")
+            print(f"   • Network Docker: {config_summary['network_name']}")
+            
+        print(f"\n📁 Configurações salvas em: /root/livchat-config.json")
+        print(f"{'='*60}")
     
     def run_redis_setup(self) -> bool:
         """Executa instalação do Redis"""
@@ -473,7 +853,7 @@ class ModuleCoordinator:
         if not self.ensure_network_name():
             self.logger.warning("Nome da rede não definido. Pulando instalação do Chatwoot.")
             return True
-        chatwoot_setup = ChatwootSetup(network_name=self.args.network_name)
+        chatwoot_setup = ChatwootSetup(network_name=self.args.network_name, config_manager=self.config)
         return chatwoot_setup.run()
     
     def run_directus_setup(self) -> bool:

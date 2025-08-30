@@ -5,8 +5,10 @@ import time
 import subprocess
 import secrets
 import string
+from datetime import datetime
 from typing import Optional, Dict, Any, List
 from config import setup_logging, POLL_INTERVAL_FAST_SECONDS, LOG_STATUS_INTERVAL_SECONDS, WAIT_TIMEOUT_SECONDS_DEFAULT
+from utils.config_manager import ConfigManager
 
 class PortainerAPI:
     """Classe para interagir com a API do Portainer para deploy de stacks"""
@@ -14,56 +16,140 @@ class PortainerAPI:
     def __init__(self):
         self.logger = setup_logging()
         self.base_url = None
+        self.username = None
+        self.password = None
         self.token = None
         self.endpoint_id = None
         self.swarm_id = None
-        self.credentials_file = "/root/dados_vps/dados_portainer"
+        self.config = ConfigManager()
     
     def load_credentials(self) -> bool:
-        """Carrega credenciais do Portainer do arquivo dados_portainer"""
+        """Carrega credenciais do Portainer do ConfigManager centralizado"""
         try:
-            if not os.path.exists(self.credentials_file):
-                self.logger.info("Arquivo de credenciais do Portainer não encontrado")
-                return self.create_credentials_file()
-            
-            with open(self.credentials_file, 'r') as f:
-                content = f.read()
-            
-            # Extrai informações do arquivo
-            for line in content.split('\n'):
-                if line.startswith('Dominio do portainer:'):
-                    self.base_url = line.split(':', 1)[1].strip()
-                    if not self.base_url.startswith('https://'):
-                        self.base_url = f"https://{self.base_url}"
-            
-            if not self.base_url:
-                self.logger.error("URL do Portainer não encontrada no arquivo de credenciais")
+            # Verifica se Portainer está instalado e configurado
+            if not self.is_portainer_installed():
+                self.logger.error("❌ Portainer não está instalado/rodando")
+                self.logger.error("🔧 Instale o Portainer primeiro usando o menu principal:")
+                self.logger.error("   1. Execute: sudo python3 main.py")
+                self.logger.error("   2. Selecione '[04] Instalação do Portainer'")
+                self.logger.error("   3. Confirme o acesso após instalação")
+                self.logger.error("   4. Execute novamente esta operação")
                 return False
             
-            self.logger.info(f"Credenciais carregadas. URL: {self.base_url}")
+            # Verifica se Portainer foi confirmado pelo usuário
+            portainer_config = self.config.get_app_config("portainer")
+            if not portainer_config.get("installed"):
+                self.logger.error("❌ Portainer não foi confirmado como acessível")
+                self.logger.error("🔧 Execute a instalação do Portainer pelo menu principal primeiro")
+                return False
+            
+            # Verifica se tem credenciais salvas
+            portainer_creds = self.config.get_app_credentials("portainer")
+            if not portainer_creds or not portainer_creds.get("username") or not portainer_creds.get("password"):
+                self.logger.error("❌ Credenciais do Portainer não encontradas no ConfigManager")
+                self.logger.error("🔧 Execute a instalação do Portainer pelo menu principal primeiro")
+                self.logger.error("   (O processo irá coletar e salvar as credenciais automaticamente)")
+                return False
+            
+            # Carrega configuração e credenciais
+            self.base_url = portainer_creds.get("url") or portainer_config.get("url")
+            if not self.base_url:
+                self.base_url = f"https://{portainer_config.get('domain')}"
+            
+            if not self.base_url.startswith('https://'):
+                self.base_url = f"https://{self.base_url}"
+            
+            # Salva as credenciais para uso da API
+            self.username = portainer_creds.get("username")
+            self.password = portainer_creds.get("password")
+            
+            self.logger.info(f"Portainer encontrado e configurado: {self.base_url}")
+            self.logger.info(f"Credenciais carregadas para usuário: {self.username}")
             return True
             
         except Exception as e:
             self.logger.error(f"Erro ao carregar credenciais: {e}")
             return False
     
+    def is_portainer_installed(self) -> bool:
+        """Verifica se Portainer está instalado e rodando"""
+        try:
+            # Primeiro verifica no ConfigManager se foi instalado
+            portainer_config = self.config.get_app_config("portainer")
+            if portainer_config.get("installed") and portainer_config.get("url"):
+                # Verifica se está realmente rodando
+                result = subprocess.run(
+                    "docker stack ls --format '{{.Name}}'",
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if result.returncode == 0 and "portainer" in result.stdout:
+                    # Já tem URL salva, usa ela
+                    self.base_url = portainer_config["url"]
+                    self.logger.info(f"Portainer encontrado rodando: {self.base_url}")
+                    return True
+            
+            # Senão, verifica apenas se stack está rodando
+            result = subprocess.run(
+                "docker stack ls --format '{{.Name}}'",
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            return result.returncode == 0 and "portainer" in result.stdout
+        except Exception:
+            return False
+    
+    
     def create_credentials_file(self) -> bool:
         """Cria arquivo de credenciais perguntando interativamente ao usuário"""
         try:
-            print("\n" + "="*80)
-            print("CONFIGURAÇÃO DAS CREDENCIAIS DO PORTAINER")
-            print("="*80)
-            print("\nPara fazer deploy das stacks via API do Portainer, precisamos das credenciais.")
-            print("\nPasso 1/3")
-            portainer_url = input("Digite a URL do Portainer (ex: ptn.seudominio.com): ").strip()
+            print(f"\n🐳 CONFIGURAÇÃO CREDENCIAIS PORTAINER")
+            print("─" * 45)
+            print("Para fazer deploy das stacks via API do Portainer, precisamos das credenciais.")
             
-            print("\nPasso 2/3")
-            username = input("Digite seu Usuário (ex: admin): ").strip()
+            # Verifica se já tem URL salva na configuração do Portainer
+            portainer_config = self.config.get_app_config("portainer")
+            if portainer_config.get("url"):
+                suggested_url = portainer_config["url"].replace("https://", "")
+            else:
+                suggested_url = self.config.suggest_domain("ptn")
             
-            print("\nPasso 3/3")
-            print("Obs: A senha não aparecerá ao digitar")
+            print(f"\n📝 Passo 1/3")
+            if suggested_url:
+                prompt = f"URL do Portainer (Enter para '{suggested_url}' ou digite outra)"
+            else:
+                prompt = "Digite a URL do Portainer (ex: ptn.seudominio.com)"
+            
+            portainer_url = input(f"{prompt}: ").strip()
+            if not portainer_url and suggested_url:
+                portainer_url = suggested_url
+            
+            print(f"\n👤 Passo 2/3")
+            # Sugere email padrão do ConfigManager para autenticação
+            default_email = self.config.get_user_email()
+            if default_email:
+                prompt = f"Usuário do Portainer (Enter para '{default_email}' ou digite outro)"
+                username = input(f"{prompt}: ").strip()
+                if not username:
+                    username = default_email
+            else:
+                username = input("Usuário do Portainer (Enter para 'admin' ou digite outro): ").strip()
+                if not username:
+                    username = "admin"
+            
+            print(f"\n🔐 Passo 3/3")
+            # Gera senha segura sugerida
+            suggested_password = self.config.generate_secure_password(64)
+            print(f"Senha sugerida (64 caracteres seguros): {suggested_password}")
+            
             import getpass
-            password = getpass.getpass("Digite a Senha: ").strip()
+            password = getpass.getpass("Digite a senha (Enter para usar a sugerida): ").strip()
+            if not password:
+                password = suggested_password
             
             if not portainer_url or not username or not password:
                 self.logger.error("Todas as credenciais são obrigatórias")
@@ -71,17 +157,14 @@ class PortainerAPI:
             
             # Testa as credenciais antes de salvar
             if self.test_credentials(portainer_url, username, password):
-                # Salva as credenciais no arquivo
-                os.makedirs(os.path.dirname(self.credentials_file), exist_ok=True)
+                # Salva as credenciais no ConfigManager
+                self.config.save_app_credentials("portainer", {
+                    "url": portainer_url,
+                    "username": username,
+                    "password": password
+                })
                 
-                with open(self.credentials_file, 'w') as f:
-                    f.write(f"[ PORTAINER ]\n")
-                    f.write(f"Dominio do portainer: {portainer_url}\n\n")
-                    f.write(f"Usuario: {username}\n\n")
-                    f.write(f"Senha: {password}\n\n")
-                    f.write(f"Token: \n")
-                
-                self.logger.info("Credenciais do Portainer salvas com sucesso")
+                self.logger.info("Credenciais do Portainer salvas com sucesso no ConfigManager")
                 return True
             else:
                 self.logger.error("Credenciais inválidas. Não foi possível autenticar com o Portainer")
@@ -111,12 +194,69 @@ class PortainerAPI:
                 if token and token != "null":
                     self.logger.info("Credenciais do Portainer validadas com sucesso")
                     return True
+            elif response.status_code == 422:
+                # Portainer não inicializado - primeiro acesso
+                self.logger.error(f"❌ Portainer ainda não foi inicializado!")
+                self.logger.error(f"🔧 AÇÃO NECESSÁRIA:")
+                self.logger.error(f"   1. Acesse: {base_url}")  
+                self.logger.error(f"   2. Crie o usuário administrador")
+                self.logger.error(f"   3. Use o mesmo email/senha que digitou aqui")
+                self.logger.error(f"   4. Execute o sistema novamente")
+                return False
+            elif response.status_code == 404:
+                self.logger.error(f"❌ Portainer não acessível em: {base_url}")
+                self.logger.error(f"🔧 Verifique se o Portainer está rodando e acessível")
+                return False
             
             self.logger.error(f"Falha na autenticação: HTTP {response.status_code}")
+            if response.status_code == 401:
+                self.logger.error("❌ Credenciais incorretas. Verifique usuário e senha.")
+            
             return False
             
         except Exception as e:
             self.logger.error(f"Erro ao testar credenciais: {e}")
+            return False
+    
+    def initialize_portainer(self, base_url: str, username: str, password: str) -> bool:
+        """Inicializa Portainer automaticamente criando o usuário admin"""
+        try:
+            # Primeiro verifica se realmente não está inicializado
+            response = requests.get(f"{base_url}/api/status", verify=False, timeout=10)
+            if response.status_code != 200:
+                return False
+            
+            status = response.json()
+            if not status.get("RequiresInitialConfiguration", False):
+                # Já inicializado
+                return True
+            
+            self.logger.info("🔧 Inicializando Portainer automaticamente...")
+            
+            # Criar usuário admin
+            init_data = {
+                "Username": username,
+                "Password": password
+            }
+            
+            response = requests.post(
+                f"{base_url}/api/users/admin/init",
+                json=init_data,
+                verify=False,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                self.logger.info("✅ Usuário admin criado com sucesso")
+                # Aguarda um pouco para o Portainer processar
+                time.sleep(2)
+                return True
+            else:
+                self.logger.error(f"❌ Falha ao criar usuário admin: HTTP {response.status_code}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"❌ Erro na inicialização automática: {e}")
             return False
     
     def authenticate(self) -> bool:
@@ -126,25 +266,24 @@ class PortainerAPI:
                 if not self.load_credentials():
                     return False
             
-            # Lê credenciais do arquivo e recarrega base_url
-            with open(self.credentials_file, 'r') as f:
-                content = f.read()
+            # Carrega credenciais do ConfigManager
+            portainer_creds = self.config.get_app_credentials("portainer")
             
-            username = None
-            password = None
+            if not portainer_creds:
+                self.logger.error("Credenciais do Portainer não encontradas no ConfigManager")
+                return False
             
-            for line in content.split('\n'):
-                if line.startswith('Dominio do portainer:'):
-                    self.base_url = line.split(':', 1)[1].strip()
-                    if not self.base_url.startswith('https://'):
-                        self.base_url = f"https://{self.base_url}"
-                elif line.startswith('Usuario:'):
-                    username = line.split(':', 1)[1].strip()
-                elif line.startswith('Senha:'):
-                    password = line.split(':', 1)[1].strip()
+            username = portainer_creds.get("username")
+            password = portainer_creds.get("password")
+            
+            # Atualiza base_url se necessário
+            if portainer_creds.get("url"):
+                self.base_url = portainer_creds["url"]
+                if not self.base_url.startswith('https://'):
+                    self.base_url = f"https://{self.base_url}"
             
             if not username or not password:
-                self.logger.error("Usuário ou senha não encontrados no arquivo de credenciais")
+                self.logger.error("Usuário ou senha não encontrados nas credenciais")
                 return False
             
             # Tenta obter token com retry
@@ -483,23 +622,19 @@ class PortainerAPI:
             return False
     
     def save_service_credentials(self, service_name: str, credentials: Dict[str, Any]) -> bool:
-        """Salva credenciais do serviço"""
+        """Salva credenciais do serviço no ConfigManager centralizado"""
         try:
-            credentials_path = f"/root/dados_vps/dados_{service_name}"
+            # Adiciona timestamp
+            credentials["configured_at"] = datetime.now().isoformat()
             
-            # Criar diretório se não existir
-            os.makedirs(os.path.dirname(credentials_path), exist_ok=True)
+            # Salva no ConfigManager
+            self.config.save_app_credentials(service_name, credentials)
             
-            # Salvar credenciais
-            with open(credentials_path, 'w', encoding='utf-8') as f:
-                for key, value in credentials.items():
-                    f.write(f"{key}={value}\n")
-            
-            self.logger.info(f"Credenciais salvas em {credentials_path}")
+            self.logger.info(f"Credenciais de {service_name} salvas no ConfigManager centralizado")
             return True
             
         except Exception as e:
-            self.logger.error(f"Erro ao salvar credenciais: {e}")
+            self.logger.error(f"Erro ao salvar credenciais de {service_name}: {e}")
             return False
     
     def generate_password(self, length: int = 16, use_special_chars: bool = True) -> str:

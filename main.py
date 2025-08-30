@@ -60,7 +60,9 @@ def run_setup() -> bool:
 
 def main():
     """Função principal - sempre inicia pelo menu interativo"""
-    print("\n=== Sistema de Setup Modular ===\n")
+    print(f"\n🚀 SISTEMA DE SETUP LIVCHAT")
+    print("─" * 35)
+    print()
     
     # Valida pré-requisitos
     if not validate_prerequisites():

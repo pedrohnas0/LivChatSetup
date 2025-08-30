@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Utilitário para integração com a API da Cloudflare
-Módulo reutilizável para gerenciamento de DNS automático
+Utilitário para integração com a API da Cloudflare v2.0
+Módulo reutilizável integrado ao ConfigManager
 """
 
 import os
@@ -10,24 +10,36 @@ import requests
 import logging
 import re
 from datetime import datetime
+from typing import Dict, Optional, List
+from .config_manager import ConfigManager
 
 class CloudflareAPI:
-    """Integração com a API da Cloudflare para DNS automático"""
+    """Integração com a API da Cloudflare para DNS automático v2.0
     
-    def __init__(self, logger=None):
+    Integrado ao ConfigManager para configurações centralizadas
+    """
+    
+    def __init__(self, config_manager: ConfigManager = None, logger=None):
         self.logger = logger or logging.getLogger(__name__)
         self.base_url = "https://api.cloudflare.com/client/v4"
-        self.credentials_file = "/root/dados_vps/dados_cloudflare"
+        self.config = config_manager or ConfigManager()
         
-        # Carrega credenciais
-        self.api_key = None
-        self.email = None
+        # Carrega credenciais do ConfigManager
+        self.api_token = None  # Para tokens Bearer
+        self.api_key = None    # Para API Keys tradicionais
+        self.email = None      # Necessário para API Keys
         self.zone_name = None
         self.zone_id = None
         
         self._load_credentials()
         
-        if self.api_key and self.email:
+        # Configura headers baseado no tipo de autenticação
+        if self.api_token:
+            self.headers = {
+                "Authorization": f"Bearer {self.api_token}",
+                "Content-Type": "application/json"
+            }
+        elif self.api_key and self.email:
             self.headers = {
                 "X-Auth-Email": self.email,
                 "X-Auth-Key": self.api_key,
@@ -37,59 +49,103 @@ class CloudflareAPI:
             self.headers = None
     
     def _load_credentials(self):
-        """Carrega credenciais do arquivo de configuração"""
+        """Carrega credenciais do ConfigManager"""
         try:
-            if os.path.exists(self.credentials_file):
-                with open(self.credentials_file, 'r') as f:
-                    for line in f:
-                        line = line.strip()
-                        if line.startswith('API_KEY:'):
-                            self.api_key = line.split(':', 1)[1].strip()
-                        elif line.startswith('EMAIL:'):
-                            self.email = line.split(':', 1)[1].strip()
-                        elif line.startswith('ZONE:'):
-                            self.zone_name = line.split(':', 1)[1].strip()
-                        elif line.startswith('ZONE_ID:'):
-                            self.zone_id = line.split(':', 1)[1].strip()
+            cloudflare_config = self.config.get_cloudflare_config()
+            
+            if cloudflare_config.get("enabled"):
+                # Tenta carregar como Token primeiro
+                self.api_token = cloudflare_config.get("api_token")
+                # Se não for Token, tenta API Key + Email
+                if not self.api_token:
+                    self.api_key = cloudflare_config.get("api_token")  # api_token pode ser api_key
+                    self.email = cloudflare_config.get("email")
                 
-                self.logger.debug(f"✅ Credenciais Cloudflare carregadas: {self.email} - {self.zone_name}")
+                self.zone_name = cloudflare_config.get("zone_name")
+                self.zone_id = cloudflare_config.get("zone_id")
+                
+                auth_type = "Token" if self.api_token else "API Key"
+                self.logger.debug(f"✅ Credenciais Cloudflare carregadas ({auth_type}): {self.zone_name}")
             else:
-                self.logger.debug("❌ Arquivo de credenciais Cloudflare não encontrado")
+                # Tenta migração das credenciais antigas
+                self._migrate_old_credentials()
                 
         except Exception as e:
             self.logger.error(f"Erro ao carregar credenciais Cloudflare: {e}")
     
-    def _save_credentials(self):
-        """Salva credenciais no arquivo de configuração"""
+    def _migrate_old_credentials(self):
+        """Migra credenciais do arquivo antigo para o ConfigManager"""
+        old_file = "/root/dados_vps/dados_cloudflare"
+        
+        if not os.path.exists(old_file):
+            self.logger.debug("❌ Credenciais Cloudflare não encontradas")
+            return
+            
         try:
-            os.makedirs(os.path.dirname(self.credentials_file), exist_ok=True)
+            api_key = None
+            email = None
+            zone_name = None
+            zone_id = None
             
-            with open(self.credentials_file, 'w') as f:
-                f.write(f"# Credenciais da Cloudflare - Gerado em {datetime.now()}\n")
-                f.write(f"API_KEY: {self.api_key}\n")
-                f.write(f"EMAIL: {self.email}\n")
-                f.write(f"ZONE: {self.zone_name}\n")
-                f.write(f"ZONE_ID: {self.zone_id}\n")
+            with open(old_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('API_KEY:'):
+                        api_key = line.split(':', 1)[1].strip()
+                    elif line.startswith('API Token:'):  # Compatibilidade
+                        api_key = line.split(':', 1)[1].strip()
+                    elif line.startswith('EMAIL:'):
+                        email = line.split(':', 1)[1].strip()
+                    elif line.startswith('ZONE:') or line.startswith('Zone Name:'):
+                        zone_name = line.split(':', 1)[1].strip()
+                    elif line.startswith('ZONE_ID:') or line.startswith('Zone ID:'):
+                        zone_id = line.split(':', 1)[1].strip()
             
-            self.logger.info(f"✅ Credenciais Cloudflare salvas em {self.credentials_file}")
+            if api_key and zone_name and zone_id:
+                # Salva no ConfigManager (api_token field pode conter API Key)
+                self.config.set_cloudflare_config(api_key, zone_id, zone_name)
+                # Adiciona email se disponível
+                if email:
+                    # Estende ConfigManager para suportar email
+                    cf_config = self.config.get_cloudflare_config()
+                    cf_config["email"] = email
+                    self.config.config_data["cloudflare"] = cf_config
+                    self.config.save_config()
+                
+                self.api_key = api_key
+                self.email = email
+                self.zone_name = zone_name
+                self.zone_id = zone_id
+                
+                self.logger.info("✅ Credenciais Cloudflare migradas para ConfigManager")
+                
+        except Exception as e:
+            self.logger.error(f"Erro ao migrar credenciais antigas: {e}")
+    
+    def _save_credentials(self):
+        """Salva credenciais no ConfigManager"""
+        try:
+            if self.api_token and self.zone_name and self.zone_id:
+                self.config.set_cloudflare_config(self.api_token, self.zone_id, self.zone_name)
+                self.logger.info("✅ Credenciais Cloudflare salvas no ConfigManager")
             
         except Exception as e:
             self.logger.error(f"Erro ao salvar credenciais Cloudflare: {e}")
     
-    def setup_credentials(self, api_key, email, zone_name):
+    def setup_credentials(self, api_token: str, zone_name: str) -> bool:
         """Configura credenciais da Cloudflare"""
-        self.api_key = api_key
-        self.email = email
+        self.api_token = api_token
         self.zone_name = zone_name
         
         self.headers = {
-            "X-Auth-Email": self.email,
-            "X-Auth-Key": self.api_key,
+            "Authorization": f"Bearer {self.api_token}",
             "Content-Type": "application/json"
         }
         
         # Testa e obtém zone_id
-        if self.get_zone_id():
+        zone_id = self.get_zone_id(zone_name)
+        if zone_id:
+            self.zone_id = zone_id
             self._save_credentials()
             return True
         else:
@@ -416,7 +472,7 @@ class CloudflareAPI:
                 return data.get("result", [])
             return []
         except requests.exceptions.RequestException as e:
-            self.logger.error(f"❌ Erro ao buscar registros DNS: {e}")
+            self.logger.debug(f"Erro ao buscar registros DNS (pode ser normal): {e}")
             return []
 
     def _update_dns_record(self, record_id, data):
@@ -519,55 +575,123 @@ class CloudflareAPI:
 
     def is_configured(self):
         """Verifica se a API está configurada e funcional"""
-        return (self.api_key and self.email and self.zone_name and 
+        has_auth = (self.api_token or (self.api_key and self.email))
+        return (has_auth and self.zone_name and 
                 self.headers and (self.zone_id or self.get_zone_id()))
 
-def get_cloudflare_api(logger=None):
-    """Factory function para obter instância configurada da CloudflareAPI"""
-    cf = CloudflareAPI(logger)
+    def suggest_domain_for_app(self, app_name: str) -> str:
+        """Sugere domínio para uma aplicação usando ConfigManager"""
+        return self.config.suggest_domain(app_name)
+    
+    def create_app_dns_record(self, app_name: str, domain: str = None) -> bool:
+        """Cria registro DNS para uma aplicação específica"""
+        if not self.is_configured():
+            self.logger.error("❌ Cloudflare não configurado")
+            return False
+        
+        # Usa domínio sugerido se não fornecido
+        if not domain:
+            domain = self.suggest_domain_for_app(app_name)
+        
+        if not domain:
+            self.logger.error("❌ Não foi possível determinar domínio para a aplicação")
+            return False
+        
+        # Detecta IP público do servidor
+        ip_address = self._detect_server_ip()
+        if not ip_address:
+            self.logger.error("❌ Não foi possível detectar IP público do servidor")
+            return False
+        
+        # Cria registro A
+        success = self.ensure_a_record(domain, ip_address, 
+                                     comment=f"Auto-created for {app_name} via LivChatSetup")
+        
+        if success:
+            # Salva no ConfigManager
+            self.config.add_dns_record({
+                "app_name": app_name,
+                "domain": domain,
+                "ip": ip_address,
+                "type": "A"
+            })
+            
+            self.logger.info(f"✅ DNS configurado: {domain} → {ip_address}")
+        
+        return success
+    
+    def _detect_server_ip(self) -> Optional[str]:
+        """Detecta IP público do servidor usando múltiplos serviços"""
+        try:
+            services = [
+                "https://api.ipify.org",
+                "https://ipinfo.io/ip", 
+                "https://icanhazip.com"
+            ]
+            
+            for service in services:
+                try:
+                    response = requests.get(service, timeout=10)
+                    if response.status_code == 200:
+                        ip = response.text.strip()
+                        # Validação básica de IP
+                        import ipaddress
+                        ipaddress.ip_address(ip)
+                        return ip
+                except:
+                    continue
+                    
+        except Exception as e:
+            self.logger.debug(f"Erro ao detectar IP: {e}")
+        
+        return None
+    
+    def test_api_connection(self) -> bool:
+        """Testa conexão com a API Cloudflare usando token"""
+        if not self.headers:
+            return False
+        
+        try:
+            url = f"{self.base_url}/user/tokens/verify"
+            response = requests.get(url, headers=self.headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    self.logger.info("✅ Token Cloudflare válido")
+                    return True
+            
+            self.logger.error(f"❌ Token inválido: {response.text}")
+            return False
+            
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao testar token: {e}")
+            return False
+
+
+def get_cloudflare_api(logger=None, config_manager: ConfigManager = None):
+    """Factory function v2.0 - integrado ao ConfigManager"""
+    if not config_manager:
+        config_manager = ConfigManager()
+        
+    cf = CloudflareAPI(config_manager, logger)
     
     if not cf.is_configured():
-        logger.info("🔧 Configurando credenciais Cloudflare...")
+        # Verifica se o ConfigManager já tem configurações válidas
+        try:
+            cloudflare_config = config_manager.get_cloudflare_config()
+            if cloudflare_config and cloudflare_config.get("enabled") and cloudflare_config.get("api_token") and cloudflare_config.get("zone_name"):
+                # Tenta configurar com dados existentes
+                if cf.setup_credentials(cloudflare_config["api_token"], cloudflare_config["zone_name"]):
+                    if logger:
+                        logger.info("✅ Cloudflare configurado automaticamente")
+                    return cf
+        except Exception as e:
+            if logger:
+                logger.debug(f"Erro ao carregar config Cloudflare: {e}")
         
-        # Coleta credenciais do usuário
-        api_key = input("Digite sua API Key da Cloudflare: ").strip()
-        email = input("Digite seu email da Cloudflare: ").strip()
-        
-        if not api_key or not email:
-            logger.error("❌ API Key e email são obrigatórios")
-            return None
-        
-        # Testa credenciais listando zonas disponíveis
-        temp_cf = CloudflareAPI(logger)
-        temp_cf.api_key = api_key
-        temp_cf.email = email
-        
-        zones = temp_cf.list_zones()
-        if not zones:
-            logger.error("❌ Falha ao conectar com Cloudflare ou nenhuma zona encontrada")
-            return None
-        
-        logger.info("\n📋 Zonas disponíveis:")
-        for i, zone in enumerate(zones, 1):
-            logger.info(f"  [{i}] {zone['name']} (ID: {zone['id']})")
-        
-        while True:
-            try:
-                choice = input(f"\nEscolha a zona [1-{len(zones)}]: ").strip()
-                zone_idx = int(choice) - 1
-                
-                if 0 <= zone_idx < len(zones):
-                    selected_zone = zones[zone_idx]['name']
-                    break
-                else:
-                    print(f"❌ Opção inválida. Digite um número entre 1 e {len(zones)}")
-            except ValueError:
-                print("❌ Digite um número válido")
-        
-        if cf.setup_credentials(api_key, email, selected_zone):
-            logger.info("✅ Cloudflare configurado com sucesso")
-        else:
-            logger.error("❌ Falha ao configurar Cloudflare")
-            return None
+        if logger:
+            logger.info("🔧 Cloudflare não configurado. Configure via menu principal.")
+        return None
     
     return cf

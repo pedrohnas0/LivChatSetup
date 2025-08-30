@@ -56,7 +56,7 @@ class N8NSetup(BaseSetup):
         
     def collect_user_inputs(self):
         """Coleta informações do usuário para o N8N"""
-        self.logger.info("=== Configuração do N8N ===")
+        self.logger.info("⚙️  CONFIGURAÇÃO N8N")
         
         # Domínio do N8N Editor
         while True:
@@ -89,7 +89,8 @@ class N8NSetup(BaseSetup):
         smtp_secure = "true" if smtp_port == 465 else "false"
         
         # Confirmação
-        print(f"\n=== Configuração do N8N ===")
+        print(f"\n⚙️  CONFIGURAÇÃO N8N")
+        print("─" * 25)
         print(f"Domínio N8N: {n8n_domain}")
         print(f"Domínio Webhook: {webhook_domain}")
         print(f"Email SMTP: {smtp_email}")

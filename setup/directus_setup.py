@@ -91,13 +91,15 @@ class DirectusSetup(BaseSetup):
 
     def collect_user_inputs(self) -> dict:
         """Coleta informações do usuário e retorna dicionário com variáveis"""
-        print("\n=== Configuração do Directus ===")
+        print(f"\n📝 CONFIGURAÇÃO DIRECTUS")
+        print("─" * 30)
         domain = input("Digite o domínio para o Directus (ex: cms.seudominio.com): ").strip()
         admin_email = input("Digite o email do Admin do Directus: ").strip()
         admin_password = input("Digite a senha do Admin do Directus: ").strip()
 
         # Confirmação
-        print("\n=== Confirmação ===")
+        print(f"\n✅ CONFIRMAÇÃO")
+        print("─" * 20)
         print(f"Domínio: {domain}")
         print(f"Admin Email: {admin_email}")
         confirm = input("\nConfirma as configurações? (s/N): ").strip().lower()
