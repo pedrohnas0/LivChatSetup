@@ -126,3 +126,169 @@ To add a new service stack, create these files:
 - Applications: Chatwoot and Directus are production-ready
 - Evolution API v2: Available but in testing
 - Other applications: Available via menu but may need testing
+
+## UI/Design Guidelines
+
+The project follows a consistent visual design pattern across all interfaces (bash setup script and Python TUI menu). These guidelines ensure a professional, cohesive user experience.
+
+### Color Palette
+
+Standard ANSI color codes used throughout the project:
+
+```bash
+# Primary colors
+laranja="\e[38;5;173m"    # Orange - For ASCII art and highlights
+verde="\e[32m"            # Green - For success states and selected items
+branco="\e[97m"           # Bright white - For focus states and headings
+bege="\e[93m"             # Beige - For informational text and legends
+vermelho="\e[91m"         # Red - For errors and warnings
+cinza="\e[90m"            # Gray - For borders and inactive items
+azul="\e[34m"             # Blue - For compatibility (legacy)
+reset="\e[0m"             # Reset - Always close color sequences
+```
+
+### Box Drawing Functions
+
+All UI elements use rounded Unicode box drawing characters for a modern appearance:
+
+#### Border Components
+- **Top border**: `╭─────────────────────────────────────────╮`
+- **Bottom border**: `╰─────────────────────────────────────────╯`
+- **Vertical sides**: `│` (left and right)
+
+#### Standard Functions
+```bash
+box_top() {
+    echo -e "${cinza}╭─────────────────────────────────────────────────────────────────────────────────────────────────────╮${reset}"
+}
+
+box_empty() {
+    echo -e "${cinza}│                                                                                                     │${reset}"
+}
+
+box_bottom() {
+    echo -e "${cinza}╰─────────────────────────────────────────────────────────────────────────────────────────────────────╯${reset}"
+}
+```
+
+#### Content Functions
+```bash
+# For centered content (ASCII art, titles, success messages)
+box_line_centered() {
+    local content="$1"
+    local total_width=101  # Internal box width (excluding borders)
+    
+    # Remove color codes to calculate actual text length
+    local clean_content=$(printf "%b" "$content" | sed 's/\x1b\[[0-9;]*m//g')
+    local content_length=${#clean_content}
+    
+    # Calculate padding for perfect centering
+    local total_padding=$((total_width - content_length))
+    local left_padding=$((total_padding / 2))
+    local right_padding=$((total_padding - left_padding))
+    
+    printf "${cinza}│${reset}"
+    printf "%*s" $left_padding ""
+    printf "%b" "$content"
+    printf "%*s" $right_padding ""
+    printf "${cinza}│${reset}\n"
+}
+
+# For left-aligned content (menu items, progress indicators)
+box_line() {
+    local content="$1"
+    local clean_content=$(printf "%b" "$content" | sed 's/\x1b\[[0-9;]*m//g')
+    local content_length=${#clean_content}
+    local right_padding=$((97 - content_length))  # 97 = 99 - 2 spaces
+    
+    printf "${cinza}│${reset} "
+    printf "%b" "$content"
+    printf "%*s" $right_padding ""
+    printf " ${cinza}│${reset}\n"
+}
+```
+
+### Design Principles
+
+#### 1. ASCII Art Standards
+- Always use the **orange color** (`${laranja}`) for ASCII art elements
+- Center ASCII art using `box_line_centered()` function
+- Surround with empty lines for visual breathing room
+- Use consistent letter spacing and style
+
+#### 2. Progress Indicators
+- **Success**: `${verde}✓` followed by step description
+- **Error**: `${vermelho}✗` followed by step description  
+- **In Progress**: `${laranja}◐` for animated states
+- **Pending**: `${cinza}○` for not yet started
+- Format: `"✓ X/Y - Description"` where X/Y shows progress
+
+#### 3. Interactive Elements
+- **Current selection**: `→` arrow prefix with `${branco}` (white) text
+- **Selected items**: `●` filled circle with `${verde}` (green) color
+- **Unselected items**: `○` empty circle with `${cinza}` (gray) color
+- **Focus indication**: White text for current item, gray for others
+
+#### 4. Menu Design Patterns
+```bash
+# Header with counter
+╭─ SETUP LIVCHAT ─────────────────────── Selecionados: 3/35 ─╮
+│ ↑/↓ navegar · → marcar (●/○) · Enter duplo executar · Esc voltar              │
+│                                                               │
+
+# Content area with proper alignment
+│ → ● [1] Configuração Básica do Sistema                       │
+│   ○ [2] Configuração de Hostname                             │
+│   ○ [3] Instalação do Docker + Swarm                         │
+
+# Footer with legend
+│                                                               │
+╰───────────────────────────────────────────────────────────────╯
+Legenda: ○ = não selecionado · ● = selecionado
+```
+
+#### 5. Self-Contained Requirements
+- All design functions must be included inline in bash scripts
+- No external dependencies or utility files
+- Compatible with web installation: `bash <(curl -sSL setup.livchat.ai)`
+- All Unicode characters must render correctly in standard terminals
+
+#### 6. Terminal Behavior
+- Never clear important status messages (like "VERIFICANDO")
+- Use selective line clearing: `\x1b[1A\x1b[2K` for menu redraws
+- Preserve terminal history for debugging
+- Handle terminal width gracefully (fixed 101-character internal width)
+
+### Usage Examples
+
+#### Setup Script Pattern
+```bash
+nome_aviso(){
+    clear
+    echo ""
+    box_top
+    box_empty
+    box_empty
+    box_line_centered "${laranja}     ██╗     ██╗██╗   ██╗ ██████╗██╗  ██╗ █████╗ ████████╗     ${reset}"
+    box_line_centered "${laranja}     ██║     ██║██║   ██║██╔════╝██║  ██║██╔══██╗╚══██╔══╝     ${reset}"
+    box_empty
+    box_empty
+    box_bottom
+    echo ""
+}
+```
+
+#### Progress Display Pattern
+```bash
+echo -e "${verde}✓ 1/15 - Fazendo Update${reset}"
+echo -e "${verde}✓ 2/15 - Fazendo Upgrade${reset}"  
+echo -e "${laranja}◐ 3/15 - Instalando sudo${reset}"
+echo -e "${cinza}○ 4/15 - Instalando curl${reset}"
+```
+
+### Implementation Notes
+- All color variables must be defined at the top of each script
+- Always use `${reset}` after colored text to prevent color bleeding
+- Test alignment with different terminal widths during development
+- Validate Unicode character rendering in various terminal environments
+- Follow the 101-character internal width standard for consistency

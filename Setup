@@ -4,14 +4,61 @@
 ##                                         LIVCHAT SETUP                                       ##
 ## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##
 
-## Cores
-amarelo="\e[33m"
-verde="\e[32m"
-branco="\e[97m"
-bege="\e[93m"
-vermelho="\e[91m"
-azul="\e[34m"
-reset="\e[0m"
+# Cores melhoradas
+laranja="\e[38;5;173m"      # Cor laranja suave para texto
+verde="\e[32m"              # Verde para sucesso
+branco="\e[97m"             # Branco brilhante para destaques
+bege="\e[93m"               # Bege para informações
+vermelho="\e[91m"           # Vermelho para erros
+cinza="\e[90m"              # Cinza para bordas
+azul="\e[34m"               # Azul (mantido para compatibilidade)
+reset="\e[0m"               # Reset das cores
+
+# Funções de UI com bordas arredondadas (largura aumentada)
+box_line_centered() {
+    local content="$1"
+    local total_width=101  # Largura interna total da caixa (101 - 2 bordas)
+    
+    # Remove códigos de cor para calcular tamanho real do texto
+    local clean_content=$(printf "%b" "$content" | sed 's/\x1b\[[0-9;]*m//g')
+    local content_length=${#clean_content}
+    
+    # Calcula espaçamento para centralizar perfeitamente
+    local total_padding=$((total_width - content_length))
+    local left_padding=$((total_padding / 2))
+    local right_padding=$((total_padding - left_padding))
+    
+    # Monta a linha com espaçamento calculado e processa as cores
+    printf "${cinza}│${reset}"
+    printf "%*s" $left_padding ""
+    printf "%b" "$content"
+    printf "%*s" $right_padding ""
+    printf "${cinza}│${reset}\n"
+}
+
+box_line() {
+    local content="$1"
+    local clean_content=$(printf "%b" "$content" | sed 's/\x1b\[[0-9;]*m//g')
+    local content_length=${#clean_content}
+    local right_padding=$((97 - content_length))  # 97 = 99 - 2 espaços (início e fim)
+    
+    printf "${cinza}│${reset} "
+    printf "%b" "$content"
+    printf "%*s" $right_padding ""
+    printf " ${cinza}│${reset}\n"
+}
+
+box_top() {
+    echo -e "${cinza}╭─────────────────────────────────────────────────────────────────────────────────────────────────────╮${reset}"
+}
+
+box_empty() {
+    echo -e "${cinza}│                                                                                                     │${reset}"
+}
+
+box_bottom() {
+    echo -e "${cinza}╰─────────────────────────────────────────────────────────────────────────────────────────────────────╯${reset}"
+}
 
 ## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##
 ##                                         LIVCHAT SETUP                                       ##
@@ -20,33 +67,37 @@ reset="\e[0m"
 nome_aviso(){
 clear
 echo ""
-echo -e "$azul===================================================================================================$reset"
-echo -e "$azul=                                                                                                 $azul=$reset"
-echo -e "$azul=                     $branco ██╗     ██╗██╗   ██╗ ██████╗██╗  ██╗ █████╗ ████████╗                      $azul=$reset"
-echo -e "$azul=                     $branco ██║     ██║██║   ██║██╔════╝██║  ██║██╔══██╗╚══██╔══╝                      $azul=$reset"
-echo -e "$azul=                     $branco ██║     ██║██║   ██║██║     ███████║███████║   ██║                         $azul=$reset"
-echo -e "$azul=                     $branco ██║     ██║╚██╗ ██╔╝██║     ██╔══██║██╔══██║   ██║                         $azul=$reset"
-echo -e "$azul=                     $branco ███████╗██║ ╚████╔╝ ╚██████╗██║  ██║██║  ██║   ██║                         $azul=$reset"
-echo -e "$azul=                     $branco ╚══════╝╚═╝  ╚═══╝   ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝                         $azul=$reset"
-echo -e "$azul=                                                                                                 $azul=$reset"
-echo -e "$azul===================================================================================================$reset"
+box_top
+box_empty
+box_empty
+box_line_centered "${laranja}     ██╗     ██╗██╗   ██╗ ██████╗██╗  ██╗ █████╗ ████████╗     ${reset}"
+box_line_centered "${laranja}     ██║     ██║██║   ██║██╔════╝██║  ██║██╔══██╗╚══██╔══╝     ${reset}"
+box_line_centered "${laranja}     ██║     ██║██║   ██║██║     ███████║███████║   ██║        ${reset}"
+box_line_centered "${laranja}     ██║     ██║╚██╗ ██╔╝██║     ██╔══██║██╔══██║   ██║        ${reset}"
+box_line_centered "${laranja}     ███████╗██║ ╚████╔╝ ╚██████╗██║  ██║██║  ██║   ██║        ${reset}"
+box_line_centered "${laranja}     ╚══════╝╚═╝  ╚═══╝   ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝        ${reset}"
+box_empty
+box_empty
+box_bottom
 echo ""
 echo ""
 }
 
 nome_iniciando(){
-    clear
     echo ""
-    echo -e "$azul===================================================================================================$reset"
-    echo -e "$azul=                                                                                                 $azul=$reset"
-    echo -e "$azul=                  $branco ██╗███╗   ██╗██╗ ██████╗██╗ █████╗ ███╗   ██╗██████╗  ██████╗                 $azul=$reset"
-    echo -e "$azul=                  $branco ██║████╗  ██║██║██╔════╝██║██╔══██╗████╗  ██║██╔══██╗██╔═══██╗                $azul=$reset"
-    echo -e "$azul=                  $branco ██║██╔██╗ ██║██║██║     ██║███████║██╔██╗ ██║██║  ██║██║   ██║                $azul=$reset"
-    echo -e "$azul=                  $branco ██║██║╚██╗██║██║██║     ██║██╔══██║██║╚██╗██║██║  ██║██║   ██║                $azul=$reset"
-    echo -e "$azul=                  $branco ██║██║ ╚████║██║╚██████╗██║██║  ██║██║ ╚████║██████╔╝╚██████╔╝                $azul=$reset"
-    echo -e "$azul=                  $branco ╚═╝╚═╝  ╚═══╝╚═╝ ╚═════╝╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝  ╚═════╝                 $azul=$reset"
-    echo -e "$azul=                                              v. 1.0.0                                           $azul=$reset"
-    echo -e "$azul===================================================================================================$reset"
+    box_top
+    box_empty
+    box_empty
+    box_line_centered "${laranja}     ██╗███╗   ██╗██╗ ██████╗██╗ █████╗ ███╗   ██╗██████╗  ██████╗      ${reset}"
+    box_line_centered "${laranja}     ██║████╗  ██║██║██╔════╝██║██╔══██╗████╗  ██║██╔══██╗██╔═══██╗     ${reset}"
+    box_line_centered "${laranja}     ██║██╔██╗ ██║██║██║     ██║███████║██╔██╗ ██║██║  ██║██║   ██║     ${reset}"
+    box_line_centered "${laranja}     ██║██║╚██╗██║██║██║     ██║██╔══██║██║╚██╗██║██║  ██║██║   ██║     ${reset}"
+    box_line_centered "${laranja}     ██║██║ ╚████║██║╚██████╗██║██║  ██║██║ ╚████║██████╔╝╚██████╔╝     ${reset}"
+    box_line_centered "${laranja}     ╚═╝╚═╝  ╚═══╝╚═╝ ╚═════╝╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝  ╚═════╝      ${reset}"
+    box_empty
+    box_line_centered "${branco}v. 1.0.0${reset}"
+    box_empty
+    box_bottom
     echo ""
     echo ""
 }
@@ -54,16 +105,18 @@ nome_iniciando(){
 nome_verificando(){
     clear
     echo ""
-    echo -e "$azul===================================================================================================$reset"
-    echo -e "$azul=                                                                                                 $azul=$reset"
-    echo -e "$azul=       $branco ██╗   ██╗███████╗██████╗ ██╗███████╗██╗ ██████╗ █████╗ ███╗   ██╗██████╗  ██████╗       $azul=$reset"
-    echo -e "$azul=       $branco ██║   ██║██╔════╝██╔══██╗██║██╔════╝██║██╔════╝██╔══██╗████╗  ██║██╔══██╗██╔═══██╗      $azul=$reset"
-    echo -e "$azul=       $branco ██║   ██║█████╗  ██████╔╝██║█████╗  ██║██║     ███████║██╔██╗ ██║██║  ██║██║   ██║      $azul=$reset"
-    echo -e "$azul=       $branco ╚██╗ ██╔╝██╔══╝  ██╔══██╗██║██╔══╝  ██║██║     ██╔══██║██║╚██╗██║██║  ██║██║   ██║      $azul=$reset"
-    echo -e "$azul=       $branco  ╚████╔╝ ███████╗██║  ██║██║██║     ██║╚██████╗██║  ██║██║ ╚████║██████╔╝╚██████╔╝      $azul=$reset"
-    echo -e "$azul=       $branco   ╚═══╝  ╚══════╝╚═╝  ╚═╝╚═╝╚═╝     ╚═╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝  ╚═════╝       $azul=$reset"
-    echo -e "$azul=                                                                                                 $azul=$reset"
-    echo -e "$azul===================================================================================================$reset"
+    box_top
+    box_empty
+    box_empty
+    box_line_centered "${laranja}     ██╗   ██╗███████╗██████╗ ██╗███████╗██╗ ██████╗ █████╗ ███╗   ██╗██████╗  ██████╗      ${reset}"
+    box_line_centered "${laranja}     ██║   ██║██╔════╝██╔══██╗██║██╔════╝██║██╔════╝██╔══██╗████╗  ██║██╔══██╗██╔═══██╗     ${reset}"
+    box_line_centered "${laranja}     ██║   ██║█████╗  ██████╔╝██║█████╗  ██║██║     ███████║██╔██╗ ██║██║  ██║██║   ██║     ${reset}"
+    box_line_centered "${laranja}     ╚██╗ ██╔╝██╔══╝  ██╔══██╗██║██╔══╝  ██║██║     ██╔══██║██║╚██╗██║██║  ██║██║   ██║     ${reset}"
+    box_line_centered "${laranja}      ╚████╔╝ ███████╗██║  ██║██║██║     ██║╚██████╗██║  ██║██║ ╚████║██████╔╝╚██████╔╝     ${reset}"
+    box_line_centered "${laranja}       ╚═══╝  ╚══════╝╚═╝  ╚═╝╚═╝╚═╝     ╚═╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝  ╚═════╝      ${reset}"
+    box_empty
+    box_empty
+    box_bottom
     echo ""
     echo ""
 }
@@ -81,9 +134,7 @@ echo ""
 ##                                         LIVCHAT SETUP                                       ##
 ## // ## // ## // ## // ## // ## // ## // ## //## // ## // ## // ## // ## // ## // ## // ## // ##
 
-clear
 nome_verificando
-echo "Aguarde enquanto verificamos algumas informações."
 sleep 1
 
 # Verifica se está usando uma distribuição suportada
@@ -91,7 +142,6 @@ if ! grep -qE 'PRETTY_NAME="(Ubuntu (20|22)\.|Debian GNU/Linux (11|12))' /etc/os
     nome_aviso
     desc_ver
     sleep 5
-    clear
     nome_verificando
 fi
 
@@ -103,7 +153,6 @@ fi
 
 # Verifica se o usuário está no diretório /root/
 if [ "$PWD" != "/root" ]; then
-    echo "Mudando para o diretório /root/"
     cd /root || exit
 fi
 
@@ -113,135 +162,133 @@ fi
 
 nome_iniciando 
 
-## Fazendo update
+# Fazendo update
 sudo apt update > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo "1/15 - [ OK ] - Fazendo Update"
+    echo -e "${verde}✓ 1/15 - Fazendo Update${reset}"
 else
-    echo "1/15 - [ OFF ] - Fazendo Update"
+    echo -e "${vermelho}✗ 1/15 - Fazendo Update${reset}"
 fi
 
 echo ""
 
-## Fazendo upgrade
+# Fazendo upgrade
 sudo apt upgrade -y > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo "2/15 - [ OK ] - Fazendo Upgrade"
+    echo -e "${verde}✓ 2/15 - Fazendo Upgrade${reset}"
 else
-    echo "2/15 - [ OFF ] - Fazendo Upgrade"
+    echo -e "${vermelho}✗ 2/15 - Fazendo Upgrade${reset}"
 fi
 
 echo ""
 
-## Instalando Sudo
+# Instalando Sudo
 apt install sudo -y > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo "3/15 - [ OK ] - Verificando/Instalando sudo"
+    echo -e "${verde}✓ 3/15 - Verificando/Instalando sudo${reset}"
 else
-    echo "3/15 - [ OFF ] - Verificando/Instalando sudo"
+    echo -e "${vermelho}✗ 3/15 - Verificando/Instalando sudo${reset}"
 fi
 
 echo ""
 
-## Instalando curl
+# Instalando curl
 sudo apt install curl -y > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo "4/15 - [ OK ] - Verificando/Instalando curl"
+    echo -e "${verde}✓ 4/15 - Verificando/Instalando curl${reset}"
 else
-    echo "4/15 - [ OFF ] - Verificando/Instalando curl"
+    echo -e "${vermelho}✗ 4/15 - Verificando/Instalando curl${reset}"
 fi
 
 echo ""
 
-## Instalando wget
+# Instalando wget
 sudo apt install wget -y > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo "5/15 - [ OK ] - Verificando/Instalando wget"
+    echo -e "${verde}✓ 5/15 - Verificando/Instalando wget${reset}"
 else
-    echo "5/15 - [ OFF ] - Verificando/Instalando wget"
+    echo -e "${vermelho}✗ 5/15 - Verificando/Instalando wget${reset}"
 fi
 
 echo ""
 
-## Instalando git
+# Instalando git
 apt install git -y > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo "6/15 - [ OK ] - Verificando/Instalando Git"
+    echo -e "${verde}✓ 6/15 - Verificando/Instalando Git${reset}"
 else
-    echo "6/15 - [ OFF ] - Verificando/Instalando Git"
+    echo -e "${vermelho}✗ 6/15 - Verificando/Instalando Git${reset}"
 fi
 
 echo ""
 
-## Instalando python3
+# Instalando python3
 apt install python3 -y > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo "7/15 - [ OK ] - Verificando/Instalando Python3"
+    echo -e "${verde}✓ 7/15 - Verificando/Instalando Python3${reset}"
 else
-    echo "7/15 - [ OFF ] - Verificando/Instalando Python3"
+    echo -e "${vermelho}✗ 7/15 - Verificando/Instalando Python3${reset}"
 fi
 
 echo ""
 
-## Instalando python3-pip
+# Instalando python3-pip
 apt install python3-pip -y > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo "8/15 - [ OK ] - Verificando/Instalando Python3-pip"
+    echo -e "${verde}✓ 8/15 - Verificando/Instalando Python3-pip${reset}"
 else
-    echo "8/15 - [ OFF ] - Verificando/Instalando Python3-pip"
+    echo -e "${vermelho}✗ 8/15 - Verificando/Instalando Python3-pip${reset}"
 fi
 
 echo ""
 
-## Instalando python3-venv
+# Instalando python3-venv
 apt install python3-venv -y > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo "9/15 - [ OK ] - Verificando/Instalando Python3-venv"
+    echo -e "${verde}✓ 9/15 - Verificando/Instalando Python3-venv${reset}"
 else
-    echo "9/15 - [ OFF ] - Verificando/Instalando Python3-venv"
+    echo -e "${vermelho}✗ 9/15 - Verificando/Instalando Python3-venv${reset}"
 fi
 
 echo ""
 
-## Instalando unzip
+# Instalando unzip
 apt install unzip -y > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo "10/15 - [ OK ] - Verificando/Instalando unzip"
+    echo -e "${verde}✓ 10/15 - Verificando/Instalando unzip${reset}"
 else
-    echo "10/15 - [ OFF ] - Verificando/Instalando unzip"
+    echo -e "${vermelho}✗ 10/15 - Verificando/Instalando unzip${reset}"
 fi
 
 echo ""
 
-## Instalando jq
+# Instalando jq
 sudo apt install jq -y > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo "11/15 - [ OK ] - Verificando/Instalando jq"
+    echo -e "${verde}✓ 11/15 - Verificando/Instalando jq${reset}"
 else
-    echo "11/15 - [ OFF ] - Verificando/Instalando jq"
+    echo -e "${vermelho}✗ 11/15 - Verificando/Instalando jq${reset}"
 fi
 
 echo ""
 
-## Instalando apache2-utils
+# Instalando apache2-utils
 sudo apt install apache2-utils -y > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo "12/15 - [ OK ] - Verificando/Instalando apache2-utils"
+    echo -e "${verde}✓ 12/15 - Verificando/Instalando apache2-utils${reset}"
 else
-    echo "12/15 - [ OFF ] - Verificando/Instalando apache2-utils"
+    echo -e "${vermelho}✗ 12/15 - Verificando/Instalando apache2-utils${reset}"
 fi
 
 echo ""
 
-## Fazendo update final
+# Fazendo update final
 sudo apt update > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo "13/15 - [ OK ] - Update final"
+    echo -e "${verde}✓ 13/15 - Update final${reset}"
 else
-    echo "13/15 - [ OFF ] - Update final"
+    echo -e "${vermelho}✗ 13/15 - Update final${reset}"
 fi
-
-echo ""
 
 # Verifica se o diretório LivChatSetup já existe
 if [ -d "LivChatSetup" ]; then
@@ -252,33 +299,47 @@ fi
 # Clona o repositório
 git clone https://github.com/pedrohnas0/LivChatSetup.git > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo "14/15 - [ OK ] - Clonando repositório LivChatSetup"
+    echo -e "${verde}✓ 14/15 - Clonando repositório LivChatSetup${reset}"
 else
-    echo "14/15 - [ OFF ] - Clonando repositório LivChatSetup"
-    echo "Erro ao clonar o repositório. Verifique sua conexão com a internet."
+    echo -e "${vermelho}✗ 14/15 - Clonando repositório LivChatSetup${reset}"
+    echo -e "${vermelho}Erro ao clonar o repositório. Verifique sua conexão com a internet.${reset}"
     exit 1
 fi
 
 echo ""
 
 # Entra no diretório e instala dependências
-cd LivChatSetup
-pip3 install -r requirements.txt > /dev/null 2>&1
-if [ $? -eq 0 ]; then
-    echo "15/15 - [ OK ] - Instalando dependências Python"
+if cd LivChatSetup 2>/dev/null; then
+    if [ -f "requirements.txt" ]; then
+        # echo -e "${bege}Executando: pip3 install -r requirements.txt${reset}"
+        # pip3 install -r requirements.txt 2>&1
+        pip3 install -r requirements.txt > /dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            echo -e "${verde}✓ 15/15 - Instalando dependências Python${reset}"
+        else
+            echo -e "${vermelho}✗ 15/15 - Instalando dependências Python${reset}"
+        fi
+    else
+        echo -e "${vermelho}✗ 15/15 - Arquivo requirements.txt não encontrado${reset}"
+    fi
 else
-    echo "15/15 - [ OFF ] - Instalando dependências Python"
+    echo -e "${vermelho}✗ 15/15 - Diretório LivChatSetup não encontrado${reset}"
 fi
 
 echo ""
 echo ""
-echo -e "$verde===================================================================================================$reset"
-echo -e "$verde=                                                                                                 $verde=$reset"
-echo -e "$verde=                           $branco✅ INSTALAÇÃO CONCLUÍDA COM SUCESSO! ✅$verde                              =$reset"
-echo -e "$verde=                                                                                                 $verde=$reset"
-echo -e "$verde=                              $branco Iniciando LivChat Setup automaticamente...$verde                        =$reset"
-echo -e "$verde=                                                                                                 $verde=$reset"
-echo -e "$verde===================================================================================================$reset"
+box_top
+box_empty
+box_line_centered "${laranja}     ███████╗██╗   ██╗ ██████╗███████╗███████╗███████╗ ██████╗ ${reset}"
+box_line_centered "${laranja}     ██╔════╝██║   ██║██╔════╝██╔════╝██╔════╝██╔════╝██╔═══██╗${reset}"
+box_line_centered "${laranja}     ███████╗██║   ██║██║     █████╗  ███████╗███████╗██║   ██║${reset}"
+box_line_centered "${laranja}     ╚════██║██║   ██║██║     ██╔══╝  ╚════██║╚════██║██║   ██║${reset}"
+box_line_centered "${laranja}     ███████║╚██████╔╝╚██████╗███████╗███████║███████║╚██████╔╝${reset}"
+box_line_centered "${laranja}     ╚══════╝ ╚═════╝  ╚═════╝╚══════╝╚══════╝╚══════╝ ╚═════╝ ${reset}"
+box_empty
+box_line_centered "${branco}Iniciando LivChat Setup automaticamente...${reset}"
+box_empty
+box_bottom
 echo ""
 echo ""
 sleep 2
