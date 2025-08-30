@@ -15,6 +15,15 @@ from utils.config_manager import ConfigManager
 class PortainerSetup(BaseSetup):
     """Instalação e configuração do Portainer"""
     
+    # Cores para interface (seguindo padrão do projeto)
+    LARANJA = "\033[38;5;173m"  # Orange - Para ASCII art e highlights
+    VERDE = "\033[32m"          # Green - Para success states e selected items
+    BRANCO = "\033[97m"         # Bright white - Para focus states e headings
+    BEGE = "\033[93m"           # Beige - Para informational text e legends
+    VERMELHO = "\033[91m"       # Red - Para errors e warnings
+    CINZA = "\033[90m"          # Gray - Para borders e inactive items
+    RESET = "\033[0m"           # Reset - Always close color sequences
+    
     def __init__(self, domain: str = None, network_name: str = None, config_manager: ConfigManager = None):
         super().__init__("Instalação do Portainer")
         self.domain = domain
@@ -71,31 +80,77 @@ class PortainerSetup(BaseSetup):
             self.logger.error(f"❌ Erro ao configurar DNS do Portainer: {e}")
             return False
     
+    def _get_terminal_width(self) -> int:
+        """Obtém largura do terminal de forma segura"""
+        try:
+            import shutil
+            return shutil.get_terminal_size().columns
+        except:
+            return 80  # Fallback
+    
+    def _print_section_box(self, title: str, width: int = None):
+        """Cria box de seção menor seguindo padrão do projeto"""
+        if width is None:
+            terminal_width = self._get_terminal_width()
+            width = min(60, terminal_width - 10)
+        
+        # Remove códigos de cor para calcular tamanho real
+        import re
+        clean_title = re.sub(r'\033\[[0-9;]*m', '', title)
+        
+        line = "─" * (width - 1)
+        print(f"\n{self.CINZA}╭{line}╮{self.RESET}")
+        
+        # Centralização perfeita
+        content_width = width - 2
+        centered_clean = clean_title.center(content_width)
+        
+        # Aplicar cor bege ao título centralizado
+        colored_title = f"{self.BEGE}{clean_title}{self.RESET}"
+        colored_line = centered_clean.replace(clean_title, colored_title)
+            
+        print(f"{self.CINZA}│{colored_line}{self.CINZA}│{self.RESET}")
+        print(f"{self.CINZA}╰{line}╯{self.RESET}")
+    
+    def get_user_input(self, prompt: str, required: bool = False, suggestion: str = None) -> str:
+        """Coleta entrada do usuário com sugestão opcional seguindo padrão do projeto"""
+        try:
+            if suggestion:
+                full_prompt = f"{prompt} (Enter para '{suggestion}' ou digite outro valor)"
+            else:
+                full_prompt = prompt
+                
+            value = input(f"{full_prompt}: ").strip()
+            
+            # Se não digitou nada e há sugestão, usa a sugestão
+            if not value and suggestion:
+                return suggestion
+                
+            if required and not value:
+                self.logger.warning("Valor obrigatório não fornecido")
+                return None
+                
+            return value if value else None
+            
+        except KeyboardInterrupt:
+            print("\nOperação cancelada pelo usuário.")
+            return None
+    
     def _get_domain_input(self) -> str:
         """Solicita domínio do usuário interativamente com sugestão inteligente"""
-        print(f"\n🐳 CONFIGURAÇÃO PORTAINER")
-        print("─" * 30)
+        self._print_section_box("🐳 CONFIGURAÇÃO PORTAINER")
         
         # Gera sugestão baseada na configuração DNS
         suggested_domain = self.config.suggest_domain("ptn")
         
         while True:
-            if suggested_domain:
-                prompt = f"Domínio do Portainer (Enter para '{suggested_domain}' ou digite outro)"
-            else:
-                prompt = "Digite o domínio para o Portainer (ex: ptn.seudominio.com)"
-                
-            domain = input(f"{prompt}: ").strip()
-            
-            # Se não digitou nada e tem sugestão, usa a sugestão
-            if not domain and suggested_domain:
-                return suggested_domain
+            domain = self.get_user_input("Domínio do Portainer", suggestion=suggested_domain)
             
             # Valida domínio
             if domain and '.' in domain:
                 return domain
             else:
-                print("❌ Domínio inválido! Digite um domínio válido.")
+                print(f"{self.VERMELHO}❌ Domínio inválido! Digite um domínio válido.{self.RESET}")
     
     def is_docker_running(self) -> bool:
         """Verifica se Docker está rodando"""
@@ -325,6 +380,19 @@ class PortainerSetup(BaseSetup):
             self.logger.error("❌ Criação da conta não confirmada. Configure manualmente antes de continuar.")
             return False
         
+        # Coleta credenciais reais confirmadas pelo usuário
+        real_credentials = self._collect_real_credentials(suggested_credentials)
+        if real_credentials:
+            # Salva as credenciais reais
+            self.config.save_app_credentials("portainer", {
+                "url": f"https://{self.domain}",
+                "username": real_credentials['username'],
+                "password": real_credentials['password']
+            })
+        
+        # Pergunta sobre mais instalações
+        self._ask_for_more_installations()
+        
         self.logger.info(f"✅ Acesso ao Portainer confirmado!")
         self.logger.info(f"Configuração salva no ConfigManager: {self.domain}")
         self.log_step_complete("Instalação do Portainer")
@@ -336,9 +404,8 @@ class PortainerSetup(BaseSetup):
         # Obtém email padrão ou pergunta
         default_email = self.config.get_user_email()
         if not default_email:
-            print(f"\n📧 EMAIL PADRÃO NECESSÁRIO")
-            print("─" * 30)
-            default_email = input("Digite seu email para usar como padrão: ").strip()
+            self._print_section_box("📧 EMAIL PADRÃO NECESSÁRIO")
+            default_email = self.get_user_input("Email para usar como padrão", required=True)
             if default_email:
                 self.config.set_user_email(default_email)
         
@@ -350,66 +417,74 @@ class PortainerSetup(BaseSetup):
             "password": suggested_password
         }
     
+    def _collect_real_credentials(self, suggested_credentials: dict) -> dict:
+        """Coleta as credenciais reais usadas pelo usuário (com sugestão)"""
+        self._print_section_box("📝 CONFIRMAÇÃO DAS CREDENCIAIS REAIS")
+        
+        print(f"{self.BEGE}Confirme os dados reais que você usou para criar a conta:{self.RESET}")
+        print()
+        
+        # Solicita email com sugestão
+        real_email = self.get_user_input("Email usado na conta", suggestion=suggested_credentials['username'])
+        
+        # Solicita senha com sugestão
+        real_password = self.get_user_input("Senha usada na conta", suggestion=suggested_credentials['password'])
+        
+        if real_email and real_password:
+            print(f"{self.VERDE}✅ Credenciais reais confirmadas e salvas!{self.RESET}")
+            return {
+                "username": real_email,
+                "password": real_password
+            }
+        
+        return None
+    
+    def _ask_for_more_installations(self):
+        """Pergunta se usuário quer fazer mais instalações (padrão do menu principal)"""
+        print()
+        self._print_section_box("🚀 PRÓXIMOS PASSOS")
+        
+        print(f"{self.BEGE}O Portainer foi instalado com sucesso!{self.RESET}")
+        print(f"{self.VERDE}✅{self.RESET} URL: https://{self.domain}")
+        print(f"{self.VERDE}✅{self.RESET} Conta administrativa criada")
+        print(f"{self.VERDE}✅{self.RESET} Pronto para gerenciar containers")
+        print()
+        
+        input(f"{self.BEGE}Pressione {self.VERDE}Enter{self.RESET} {self.BEGE}para instalar mais aplicações ou {self.VERMELHO}Ctrl+C{self.RESET} {self.BEGE}para encerrar...{self.RESET}")
+    
     def _show_success_summary_with_suggested_credentials(self, credentials: dict):
-        """Exibe sessão de sucesso com credenciais que o usuário DEVE usar"""
-        print(f"\n" + "=" * 70)
-        print(f"🎉 PORTAINER INSTALADO COM SUCESSO!")
-        print(f"=" * 70)
-        print(f"")
-        print(f"🌐 URL de Acesso: https://{self.domain}")
-        print(f"")
-        print(f"👤 CREDENCIAIS PARA CRIAR A CONTA ADMINISTRADOR:")
-        print(f"   • Email/Usuário: {credentials['username']}")
-        print(f"   • Senha: {credentials['password']}")
-        print(f"")
-        print(f"📝 INSTRUÇÕES:")
-        print(f"   1. Acesse https://{self.domain}")
-        print(f"   2. Crie o primeiro usuário com os dados EXATOS acima")
-        print(f"   3. Use EXATAMENTE o email e senha mostrados")
-        print(f"   4. Confirme que conseguiu fazer login")
-        print(f"")
-        print(f"⚠️  IMPORTANTE: Use exatamente esses dados para a automação funcionar!")
-        print(f"=" * 70)
-        print(f"")
+        """Exibe sessão de sucesso com credenciais que o usuário DEVE usar seguindo padrão visual"""
+        self._print_section_box("✅ PORTAINER INSTALADO COM SUCESSO!")
+        
+        print(f"{self.VERDE}🌐 URL de Acesso: {self.BRANCO}https://{self.domain}{self.RESET}")
+        print()
+        print(f"{self.BEGE}👤 CREDENCIAIS SUGERIDAS PARA CRIAR A CONTA ADMINISTRADOR:{self.RESET}")
+        print(f"   {self.VERDE}•{self.RESET} Email/Usuário: {self.BRANCO}{credentials['username']}{self.RESET}")
+        print(f"   {self.VERDE}•{self.RESET} Senha: {self.BRANCO}{credentials['password']}{self.RESET}")
+        print()
+        print(f"{self.BEGE}📝 INSTRUÇÕES:{self.RESET}")
+        print(f"   {self.VERDE}1.{self.RESET} Acesse {self.BRANCO}https://{self.domain}{self.RESET}")
+        print(f"   {self.VERDE}2.{self.RESET} Crie o primeiro usuário com os dados sugeridos acima")
+        print(f"   {self.VERDE}3.{self.RESET} Use preferencialmente o email e senha mostrados")
+        print(f"   {self.VERDE}4.{self.RESET} Confirme que conseguiu fazer login")
+        print()
+        print(f"{self.LARANJA}⚠️  DICA: Use as credenciais sugeridas para facilitar a automação!{self.RESET}")
     
     def _confirm_account_creation_with_suggested_credentials(self, credentials: dict) -> bool:
-        """Confirma se o usuário criou a conta com as credenciais sugeridas"""
-        while True:
-            print(f"🔍 CONFIRMAÇÃO DE CRIAÇÃO DA CONTA")
-            print(f"─" * 40)
-            print(f"")
-            print(f"Confirme que você:")
-            print(f"✓ Acessou https://{self.domain}")
-            print(f"✓ Criou conta com email: {credentials['username']}")
-            print(f"✓ Usou a senha exata mostrada acima")
-            print(f"✓ Conseguiu fazer login normalmente")
-            print(f"")
-            
-            resposta = input("Você criou a conta com os dados exatos mostrados? (s/n): ").strip().lower()
-            
-            if resposta in ['s', 'sim', 'y', 'yes']:
-                # Salva as credenciais no ConfigManager
-                self.config.save_app_credentials("portainer", {
-                    "url": f"https://{self.domain}",
-                    "username": credentials['username'],
-                    "password": credentials['password']
-                })
-                print(f"✅ Credenciais confirmadas e salvas!")
-                return True
-            elif resposta in ['n', 'nao', 'não', 'no']:
-                print(f"\n❌ Conta não criada com as credenciais corretas.")
-                print(f"🔧 Você DEVE usar exatamente:")
-                print(f"   • Email: {credentials['username']}")
-                print(f"   • Senha: {credentials['password']}")
-                print(f"")
-                print(f"🔄 Tente novamente ou cancele a instalação.")
-                retry = input("Tentar novamente? (s/n): ").strip().lower()
-                if retry not in ['s', 'sim', 'y', 'yes']:
-                    return False
-                continue
-            else:
-                print("❌ Responda com 's' (sim) ou 'n' (não)")
-                continue
+        """Confirma se o usuário criou a conta (seguindo padrão visual)"""
+        self._print_section_box("🔍 CONFIRMAÇÃO DE CRIAÇÃO DA CONTA")
+        
+        print(f"{self.BEGE}Confirme que você:{self.RESET}")
+        print(f"   {self.VERDE}✓{self.RESET} Acessou https://{self.domain}")
+        print(f"   {self.VERDE}✓{self.RESET} Criou uma conta de administrador")
+        print(f"   {self.VERDE}✓{self.RESET} Conseguiu fazer login normalmente")
+        print()
+        
+        # Usar padrão "Enter para continuar" como nos outros módulos
+        input(f"{self.BEGE}Pressione {self.VERDE}Enter{self.RESET} {self.BEGE}para confirmar que a conta foi criada...{self.RESET}")
+        
+        print(f"{self.VERDE}✅ Criação da conta confirmada!{self.RESET}")
+        return True
     
 
 def main():

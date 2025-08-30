@@ -14,6 +14,15 @@ from utils.config_manager import ConfigManager
 class TraefikSetup(BaseSetup):
     """Instalação e configuração do Traefik"""
     
+    # Cores para interface (seguindo padrão do projeto)
+    LARANJA = "\033[38;5;173m"  # Orange - Para ASCII art e highlights
+    VERDE = "\033[32m"          # Green - Para success states e selected items
+    BRANCO = "\033[97m"         # Bright white - Para focus states e headings
+    BEGE = "\033[93m"           # Beige - Para informational text e legends
+    VERMELHO = "\033[91m"       # Red - Para errors e warnings
+    CINZA = "\033[90m"          # Gray - Para borders e inactive items
+    RESET = "\033[0m"           # Reset - Always close color sequences
+    
     def __init__(self, email: str = None, network_name: str = None, config_manager: ConfigManager = None):
         super().__init__("Instalação do Traefik")
         self.email = email
@@ -49,31 +58,77 @@ class TraefikSetup(BaseSetup):
             
         return True
     
+    def _get_terminal_width(self) -> int:
+        """Obtém largura do terminal de forma segura"""
+        try:
+            import shutil
+            return shutil.get_terminal_size().columns
+        except:
+            return 80  # Fallback
+    
+    def _print_section_box(self, title: str, width: int = None):
+        """Cria box de seção menor seguindo padrão do projeto"""
+        if width is None:
+            terminal_width = self._get_terminal_width()
+            width = min(60, terminal_width - 10)
+        
+        # Remove códigos de cor para calcular tamanho real
+        import re
+        clean_title = re.sub(r'\033\[[0-9;]*m', '', title)
+        
+        line = "─" * (width - 1)
+        print(f"\n{self.CINZA}╭{line}╮{self.RESET}")
+        
+        # Centralização perfeita
+        content_width = width - 2
+        centered_clean = clean_title.center(content_width)
+        
+        # Aplicar cor bege ao título centralizado
+        colored_title = f"{self.BEGE}{clean_title}{self.RESET}"
+        colored_line = centered_clean.replace(clean_title, colored_title)
+            
+        print(f"{self.CINZA}│{colored_line}{self.CINZA}│{self.RESET}")
+        print(f"{self.CINZA}╰{line}╯{self.RESET}")
+    
+    def get_user_input(self, prompt: str, required: bool = False, suggestion: str = None) -> str:
+        """Coleta entrada do usuário com sugestão opcional seguindo padrão do projeto"""
+        try:
+            if suggestion:
+                full_prompt = f"{prompt} (Enter para '{suggestion}' ou digite outro valor)"
+            else:
+                full_prompt = prompt
+                
+            value = input(f"{full_prompt}: ").strip()
+            
+            # Se não digitou nada e há sugestão, usa a sugestão
+            if not value and suggestion:
+                return suggestion
+                
+            if required and not value:
+                self.logger.warning("Valor obrigatório não fornecido")
+                return None
+                
+            return value if value else None
+            
+        except KeyboardInterrupt:
+            print("\nOperação cancelada pelo usuário.")
+            return None
+    
     def _get_email_input(self) -> str:
         """Solicita email do usuário interativamente com sugestão do ConfigManager"""
-        print(f"\n🔐 CONFIGURAÇÃO TRAEFIK - SSL")
-        print("─" * 35)
+        self._print_section_box("🔐 CONFIGURAÇÃO TRAEFIK - SSL")
         
         # Busca email padrão do ConfigManager
         default_email = self.config.get_user_email()
         
         while True:
-            if default_email:
-                prompt = f"Email para certificados SSL (Enter para '{default_email}' ou digite outro)"
-            else:
-                prompt = "Digite seu email para certificados SSL"
-                
-            email = input(f"{prompt}: ").strip()
-            
-            # Se não digitou nada e tem padrão, usa o padrão
-            if not email and default_email:
-                return default_email
+            email = self.get_user_input("Email para certificados SSL", suggestion=default_email)
             
             # Valida email
             if email and '@' in email and '.' in email:
                 return email
             else:
-                print("❌ Email inválido! Digite um email válido.")
+                print(f"{self.VERMELHO}❌ Email inválido! Digite um email válido.{self.RESET}")
     
     def is_docker_running(self) -> bool:
         """Verifica se Docker está rodando"""
@@ -307,9 +362,29 @@ class TraefikSetup(BaseSetup):
         duration = self.get_duration()
         self.logger.info(f"Instalação do Traefik concluída ({duration:.2f}s)")
         self.logger.info(f"Traefik configurado com email: {self.email}")
+        
+        # Sessão de sucesso seguindo padrão visual
+        self._show_success_summary(self.email)
+        
         self.log_step_complete("Instalação do Traefik")
         
         return True
+    
+    def _show_success_summary(self, email: str):
+        """Exibe sessão de sucesso do Traefik seguindo padrão visual"""
+        self._print_section_box("✅ TRAEFIK INSTALADO COM SUCESSO!")
+        
+        print(f"{self.VERDE}🔐 Proxy Reverso: {self.BRANCO}Configurado{self.RESET}")
+        print(f"{self.VERDE}📜 Certificados SSL: {self.BRANCO}Let's Encrypt{self.RESET}")
+        print(f"{self.VERDE}📧 Email SSL: {self.BRANCO}{email}{self.RESET}")
+        print()
+        print(f"{self.BEGE}📝 CARACTERÍSTICAS:{self.RESET}")
+        print(f"   {self.VERDE}•{self.RESET} Certificados SSL automáticos para todos os serviços")
+        print(f"   {self.VERDE}•{self.RESET} Renovação automática dos certificados")
+        print(f"   {self.VERDE}•{self.RESET} Balanceamento de carga integrado")
+        print(f"   {self.VERDE}•{self.RESET} Dashboard de monitoramento disponível")
+        print()
+        print(f"{self.LARANJA}🚀 Traefik pronto para receber suas aplicações!{self.RESET}")
 
 def main():
     """Função principal para teste do módulo"""
