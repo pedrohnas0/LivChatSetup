@@ -11,6 +11,7 @@ from .base_setup import BaseSetup
 from utils.template_engine import TemplateEngine
 from utils.cloudflare_api import get_cloudflare_api
 from utils.config_manager import ConfigManager
+from utils.portainer_api import PortainerAPI
 
 class PortainerSetup(BaseSetup):
     """Instalação e configuração do Portainer"""
@@ -31,6 +32,21 @@ class PortainerSetup(BaseSetup):
         self.config = config_manager or ConfigManager()
         self.auto_mode = auto_mode  # Modo automático quando é dependência
         
+    def is_portainer_running(self) -> bool:
+        """Verifica se Portainer já está rodando"""
+        try:
+            result = subprocess.run(
+                "docker service ls --filter name=portainer_agent --format '{{.Name}}'",
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            return result.returncode == 0 and "portainer_agent" in result.stdout
+        except Exception as e:
+            self.logger.debug(f"Erro ao verificar Portainer: {e}")
+            return False
+
     def validate_prerequisites(self) -> bool:
         """Valida pré-requisitos"""
         if not self.check_root():
@@ -324,6 +340,12 @@ class PortainerSetup(BaseSetup):
         """Executa a instalação completa do Portainer"""
         self.log_step_start("Instalação do Portainer")
         
+        # Verifica se deve pular (quando é dependência e já está rodando)
+        if self.auto_mode and self.is_portainer_running():
+            self.logger.info("Portainer já está rodando, pulando configuração")
+            self.log_step_complete("Instalação do Portainer")
+            return True  # Sucesso - não precisa instalar
+            
         if not self.validate_prerequisites():
             return False
         
@@ -374,14 +396,36 @@ class PortainerSetup(BaseSetup):
             return False
         
         if self.auto_mode:
-            # Modo automático (dependência) - configuração silenciosa
-            self._show_auto_mode_summary(suggested_credentials)
-            # Salva as credenciais sugeridas automaticamente
-            self.config.save_app_credentials("portainer", {
-                "url": f"https://{self.domain}",
-                "username": suggested_credentials['username'],
-                "password": suggested_credentials['password']
-            })
+            # Modo automático (dependência) - testa silenciosamente se credenciais já funcionam
+            portainer_api = PortainerAPI()
+            if portainer_api.test_credentials(self.domain, suggested_credentials['username'], suggested_credentials['password'], silent=True):
+                # Credenciais já funcionam - salva automaticamente
+                self._show_auto_mode_summary(suggested_credentials)
+                self.config.save_app_credentials("portainer", {
+                    "url": f"https://{self.domain}",
+                    "username": suggested_credentials['username'],
+                    "password": suggested_credentials['password']
+                })
+                self.logger.info("✅ Credenciais testadas e salvas automaticamente")
+            else:
+                # Credenciais não funcionam - vai para fluxo normal de sucesso (primeira instalação)
+                self.logger.warning("⚠️ Conta de administrador ainda não foi criada no Portainer")
+                self._show_success_summary_with_suggested_credentials(suggested_credentials)
+                
+                # Confirma se o usuário criou a conta com as credenciais sugeridas
+                if not self._confirm_account_creation_with_suggested_credentials(suggested_credentials):
+                    self.logger.error("❌ Criação da conta não confirmada. Configure manualmente antes de continuar.")
+                    return False
+                
+                # Coleta credenciais reais confirmadas pelo usuário
+                real_credentials = self._collect_real_credentials(suggested_credentials)
+                if real_credentials:
+                    # Salva as credenciais reais
+                    self.config.save_app_credentials("portainer", {
+                        "url": f"https://{self.domain}",
+                        "username": real_credentials['username'],
+                        "password": real_credentials['password']
+                    })
         else:
             # Modo manual (selecionado pelo usuário) - configuração interativa
             self._show_success_summary_with_suggested_credentials(suggested_credentials)
@@ -493,6 +537,51 @@ class PortainerSetup(BaseSetup):
         print(f"   {self.VERDE}4.{self.RESET} Confirme que conseguiu fazer login")
         print()
         print(f"{self.LARANJA}⚠️  DICA: Use as credenciais sugeridas para facilitar a automação!{self.RESET}")
+    
+    def _handle_manual_account_creation_required(self, credentials: dict) -> bool:
+        """Gerencia criação manual da conta quando auto_mode falha na validação"""
+        self._print_section_box("⚠️ AÇÃO NECESSÁRIA: CRIAR CONTA MANUALMENTE")
+        
+        print(f"{self.VERMELHO}❌ PROBLEMA DETECTADO:{self.RESET}")
+        print(f"   O Portainer foi instalado mas ainda não tem uma conta de administrador criada.")
+        print()
+        
+        print(f"{self.BEGE}📝 INSTRUÇÕES PARA RESOLVER:{self.RESET}")
+        print(f"   {self.VERDE}1.{self.RESET} Acesse {self.BRANCO}https://{self.domain}{self.RESET}")
+        print(f"   {self.VERDE}2.{self.RESET} Crie o primeiro usuário administrador usando as credenciais abaixo:")
+        print()
+        print(f"      {self.VERDE}•{self.RESET} Email/Usuário: {self.BRANCO}{credentials['username']}{self.RESET}")
+        print(f"      {self.VERDE}•{self.RESET} Senha: {self.BRANCO}{credentials['password']}{self.RESET}")
+        print()
+        print(f"   {self.VERDE}3.{self.RESET} Confirme que conseguiu fazer login")
+        print(f"   {self.VERDE}4.{self.RESET} Retorne aqui e pressione Enter para continuar")
+        print()
+        print(f"{self.LARANJA}⚠️  IMPORTANTE: Use exatamente as credenciais sugeridas para manter a automação!{self.RESET}")
+        print()
+        
+        # Aguarda confirmação do usuário
+        input(f"{self.BEGE}Pressione {self.VERDE}Enter{self.RESET} {self.BEGE}após criar a conta no Portainer...{self.RESET}")
+        
+        # Testa as credenciais novamente
+        portainer_api = PortainerAPI()
+        print(f"\n{self.BEGE}🧪 Testando credenciais...{self.RESET}")
+        
+        if portainer_api.test_credentials(self.domain, credentials['username'], credentials['password']):
+            print(f"{self.VERDE}✅ Credenciais confirmadas! Conta criada com sucesso.{self.RESET}")
+            
+            # Salva as credenciais após confirmação
+            self.config.save_app_credentials("portainer", {
+                "url": f"https://{self.domain}",
+                "username": credentials['username'],
+                "password": credentials['password']
+            })
+            
+            print(f"{self.BEGE}ℹ️  Credenciais salvas para automação - prosseguindo com instalação...{self.RESET}")
+            return True
+        else:
+            print(f"{self.VERMELHO}❌ Credenciais ainda não funcionam.{self.RESET}")
+            print(f"{self.BEGE}Verifique se você criou a conta corretamente e tente novamente.{self.RESET}")
+            return False
     
     def _confirm_account_creation_with_suggested_credentials(self, credentials: dict) -> bool:
         """Confirma se o usuário criou a conta (seguindo padrão visual)"""

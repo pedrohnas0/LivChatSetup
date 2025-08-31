@@ -23,20 +23,42 @@ class TraefikSetup(BaseSetup):
     CINZA = "\033[90m"          # Gray - Para borders e inactive items
     RESET = "\033[0m"           # Reset - Always close color sequences
     
-    def __init__(self, email: str = None, network_name: str = None, config_manager: ConfigManager = None):
+    def __init__(self, email: str = None, network_name: str = None, config_manager: ConfigManager = None, auto_mode: bool = False):
         super().__init__("Instalação do Traefik")
         self.email = email
         self.network_name = network_name
         self.config = config_manager or ConfigManager()
+        self.auto_mode = auto_mode  # Modo automático quando é dependência
         
+    def is_traefik_running(self) -> bool:
+        """Verifica se Traefik já está rodando"""
+        try:
+            result = subprocess.run(
+                "docker service ls --filter name=traefik --format '{{.Name}}'",
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            return result.returncode == 0 and "traefik" in result.stdout
+        except Exception as e:
+            self.logger.debug(f"Erro ao verificar Traefik: {e}")
+            return False
+
     def validate_prerequisites(self) -> bool:
         """Valida pré-requisitos"""
         if not self.check_root():
             return False
             
-        # Solicita email interativamente se não fornecido
+        # Solicita email interativamente se não fornecido (só para modo manual)
         if not self.email:
-            self.email = self._get_email_input()
+            if self.auto_mode:
+                # No modo automático, usa email padrão
+                self.email = self.config.get_user_email()
+            else:
+                # No modo manual, pergunta interativamente
+                self.email = self._get_email_input()
+            
             if not self.email:
                 self.logger.error("Email para SSL é obrigatório")
                 return False
@@ -332,6 +354,12 @@ class TraefikSetup(BaseSetup):
         """Executa a instalação completa do Traefik"""
         self.log_step_start("Instalação do Traefik")
         
+        # Verifica se deve pular (quando é dependência e já está rodando)
+        if self.auto_mode and self.is_traefik_running():
+            self.logger.info("Traefik já está rodando, pulando configuração")
+            self.log_step_complete("Instalação do Traefik")
+            return True  # Sucesso - não precisa instalar
+            
         if not self.validate_prerequisites():
             return False
         

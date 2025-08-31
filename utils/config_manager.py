@@ -293,7 +293,7 @@ class ConfigManager:
                 "portainer": "ptn",
                 "chatwoot": "chat",
                 "directus": "cms",
-                "n8n": "workflow",
+                "n8n": "edt",
                 "grafana": "monitor",
                 "passbolt": "pass",
                 "evolution": "evo"

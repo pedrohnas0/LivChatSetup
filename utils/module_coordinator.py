@@ -504,11 +504,16 @@ class ModuleCoordinator:
                 if not self.ensure_network_name():
                     self.logger.warning("Nome da rede não definido. Pulando instalação do Traefik.")
                     return True
+                
+                # Verifica se é dependência automática ou selecionado explicitamente
+                is_auto_mode = hasattr(self, 'dependency_modules') and module_name in self.dependency_modules
+                
                 # Email será solicitado pelo próprio módulo se não fornecido
                 traefik_setup = TraefikSetup(
                     email=kwargs.get('email') or self.args.email,
                     network_name=self.args.network_name,
-                    config_manager=self.config
+                    config_manager=self.config,
+                    auto_mode=is_auto_mode
                 )
                 return traefik_setup.run()
             
@@ -582,7 +587,7 @@ class ModuleCoordinator:
                 if not self.ensure_network_name():
                     self.logger.warning("Nome da rede não definido. Pulando instalação do N8N.")
                     return True
-                n8n_setup = N8NSetup(network_name=self.args.network_name)
+                n8n_setup = N8NSetup(network_name=self.args.network_name, config_manager=self.config)
                 return n8n_setup.run()
             
             elif module_name == 'grafana':
@@ -821,8 +826,14 @@ class ModuleCoordinator:
         
         # Executa módulos em ordem
         failed_modules = []
+        skipped_modules = []
+        remaining_modules = ordered_modules.copy()
         
         for i, module in enumerate(ordered_modules, 1):
+            # Verifica se este módulo deve ser pulado devido a dependências falhadas
+            if module in skipped_modules:
+                continue
+                
             self._print_box_title(f"📋 Executando módulo {i}/{len(ordered_modules)}: {self.get_module_display_name(module)}", 80)
             
             success = self.execute_module(module)
@@ -833,15 +844,126 @@ class ModuleCoordinator:
                 self.logger.error(f"❌ Falha no módulo {module}")
                 failed_modules.append(module)
                 
+                # Verifica se outros módulos dependem deste que falhou
+                dependent_modules = self._get_dependent_modules(module, remaining_modules[i:])
+                
+                if dependent_modules:
+                    skipped_modules.extend(dependent_modules)
+                    self._handle_dependency_failure(module, dependent_modules)
+                    
+                    # Pergunta ao usuário se quer continuar com módulos restantes
+                    if not self._ask_continue_after_dependency_failure(remaining_modules[i:], dependent_modules):
+                        break
+                
                 if self.args.stop_on_error:
                     self.logger.error(f"Parando execução devido a falha em: {module}")
                     break
         
         # Resumo final
-        self.show_installation_summary(ordered_modules, failed_modules, original_selected)
+        self.show_installation_summary(ordered_modules, failed_modules, skipped_modules, original_selected)
         
         return len(failed_modules) == 0
     
+    def _get_dependent_modules(self, failed_module: str, remaining_modules: List[str]) -> List[str]:
+        """Encontra módulos que dependem do módulo falhado"""
+        dependent_modules = []
+        
+        for module in remaining_modules:
+            dependencies = self.dependencies.get(module, [])
+            if failed_module in dependencies:
+                dependent_modules.append(module)
+                
+        return dependent_modules
+    
+    def _handle_dependency_failure(self, failed_module: str, dependent_modules: List[str]):
+        """Mostra erro de dependência com sugestões"""
+        
+        # Box de erro com estilo consistente
+        self._print_section_box("⚠️ FALHA EM DEPENDÊNCIA CRÍTICA", 60)
+        
+        print(f"{self.VERMELHO}❌ MÓDULO FALHADO:{self.RESET}")
+        print(f"   {self.get_module_display_name(failed_module)}")
+        print()
+        
+        print(f"{self.LARANJA}🔗 MÓDULOS AFETADOS (serão pulados):{self.RESET}")
+        for module in dependent_modules:
+            print(f"   • {self.get_module_display_name(module)}")
+        print()
+        
+        # Sugestões específicas baseadas no módulo falhado
+        suggestions = self._get_failure_suggestions(failed_module)
+        if suggestions:
+            print(f"{self.BEGE}💡 SUGESTÕES PARA VERIFICAR:{self.RESET}")
+            for suggestion in suggestions:
+                print(f"   • {suggestion}")
+            print()
+    
+    def _get_failure_suggestions(self, failed_module: str) -> List[str]:
+        """Retorna sugestões específicas para cada tipo de falha"""
+        suggestions_map = {
+            'postgres': [
+                'Verificar se Portainer está acessível e funcionando',
+                'Confirmar credenciais do Portainer (senha pode ter sido alterada)',
+                'Verificar conectividade de rede com o Portainer',
+                'Tentar fazer login manual no Portainer via browser'
+            ],
+            'portainer': [
+                'Verificar se Docker Swarm está ativo',
+                'Confirmar se rede Docker foi criada corretamente',
+                'Verificar conectividade de rede e DNS',
+                'Verificar logs do Docker: docker service logs portainer_agent'
+            ],
+            'traefik': [
+                'Verificar se Docker Swarm está ativo',
+                'Confirmar configuração de DNS e certificados',
+                'Verificar se portas 80 e 443 estão disponíveis',
+                'Verificar logs do Traefik: docker service logs traefik'
+            ],
+            'docker': [
+                'Verificar se sistema operacional é compatível',
+                'Confirmar permissões de root',
+                'Verificar conectividade com repositórios Docker',
+                'Verificar espaço em disco disponível'
+            ]
+        }
+        
+        return suggestions_map.get(failed_module, [
+            f'Verificar logs do sistema: tail -f /var/log/setup_inicial.log',
+            f'Tentar executar apenas o módulo {failed_module} isoladamente',
+            f'Verificar pré-requisitos do módulo {failed_module}'
+        ])
+    
+    def _ask_continue_after_dependency_failure(self, remaining_modules: List[str], dependent_modules: List[str]) -> bool:
+        """Pergunta se usuário quer continuar com módulos restantes"""
+        
+        # Calcula módulos que ainda podem ser executados (não afetados)
+        unaffected_modules = [m for m in remaining_modules if m not in dependent_modules]
+        
+        if not unaffected_modules:
+            print(f"{self.VERMELHO}Nenhum módulo restante pode ser executado.{self.RESET}")
+            input(f"{self.BEGE}Pressione Enter para finalizar...{self.RESET}")
+            return False
+        
+        print(f"{self.VERDE}MÓDULOS RESTANTES (não afetados):{self.RESET}")
+        for module in unaffected_modules:
+            print(f"   • {self.get_module_display_name(module)}")
+        print()
+        
+        while True:
+            print(f"{self.BEGE}Deseja continuar com os módulos restantes?{self.RESET}")
+            print(f"{self.VERDE}Enter = Continuar{self.RESET} · {self.VERMELHO}N + Enter = Parar{self.RESET}")
+            
+            try:
+                choice = input().strip().lower()
+                if choice == '' or choice == 'y' or choice == 's':
+                    return True
+                elif choice == 'n' or choice == 'no' or choice == 'nao':
+                    return False
+                else:
+                    print(f"{self.VERMELHO}Opção inválida. Digite Enter para continuar ou N para parar.{self.RESET}")
+            except KeyboardInterrupt:
+                return False
+
     def get_module_display_name(self, module: str) -> str:
         """Retorna nome amigável do módulo"""
         names = {
@@ -865,13 +987,15 @@ class ModuleCoordinator:
         }
         return names.get(module, module.title())
     
-    def show_installation_summary(self, all_modules: List[str], failed_modules: List[str], selected_modules: List[str]):
+    def show_installation_summary(self, all_modules: List[str], failed_modules: List[str], skipped_modules: List[str], selected_modules: List[str]):
         """Exibe resumo da instalação"""
         total_time = (datetime.now() - self.start_time).total_seconds()
         
+        successful_modules = len(all_modules) - len(failed_modules) - len(skipped_modules)
+        
         self._print_box_title("📊 RESUMO DA INSTALAÇÃO", 80)
         print(f"⏱️  Tempo total: {total_time:.1f}s")
-        print(f"📦 Módulos instalados: {len(all_modules) - len(failed_modules)}/{len(all_modules)}")
+        print(f"📦 Módulos instalados: {successful_modules}/{len(all_modules)}")
         print(f"🎯 Selecionados pelo usuário: {len(selected_modules)}")
         print(f"🔗 Dependências automáticas: {len(all_modules) - len(selected_modules)}")
         
@@ -879,8 +1003,16 @@ class ModuleCoordinator:
             print(f"\n❌ MÓDULOS COM FALHA:")
             for module in failed_modules:
                 print(f"   • {self.get_module_display_name(module)}")
-        else:
+                
+        if skipped_modules:
+            print(f"\n⏭️ MÓDULOS PULADOS (dependências falharam):")
+            for module in skipped_modules:
+                print(f"   • {self.get_module_display_name(module)}")
+        
+        if not failed_modules and not skipped_modules:
             print(f"\n✅ TODOS OS MÓDULOS INSTALADOS COM SUCESSO!")
+        elif successful_modules > 0:
+            print(f"\n✅ {successful_modules} módulo(s) instalado(s) com sucesso!")
             
         # Exibe informações úteis
         config_summary = self.config.get_summary()
@@ -953,7 +1085,7 @@ class ModuleCoordinator:
         if not self.ensure_network_name():
             self.logger.warning("Nome da rede não definido. Pulando instalação do N8N.")
             return True
-        n8n_setup = N8NSetup(network_name=self.args.network_name)
+        n8n_setup = N8NSetup(network_name=self.args.network_name, config_manager=self.config)
         return n8n_setup.run()
     
     def run_grafana_setup(self) -> bool:

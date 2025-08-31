@@ -174,7 +174,7 @@ class PortainerAPI:
             self.logger.error(f"Erro ao criar arquivo de credenciais: {e}")
             return False
     
-    def test_credentials(self, portainer_url: str, username: str, password: str) -> bool:
+    def test_credentials(self, portainer_url: str, username: str, password: str, silent: bool = False) -> bool:
         """Testa se as credenciais do Portainer são válidas"""
         try:
             base_url = portainer_url
@@ -196,12 +196,13 @@ class PortainerAPI:
                     return True
             elif response.status_code == 422:
                 # Portainer não inicializado - primeiro acesso
-                self.logger.error(f"❌ Portainer ainda não foi inicializado!")
-                self.logger.error(f"🔧 AÇÃO NECESSÁRIA:")
-                self.logger.error(f"   1. Acesse: {base_url}")  
-                self.logger.error(f"   2. Crie o usuário administrador")
-                self.logger.error(f"   3. Use o mesmo email/senha que digitou aqui")
-                self.logger.error(f"   4. Execute o sistema novamente")
+                if not silent:
+                    self.logger.error(f"❌ Portainer ainda não foi inicializado!")
+                    self.logger.error(f"🔧 AÇÃO NECESSÁRIA:")
+                    self.logger.error(f"   1. Acesse: {base_url}")  
+                    self.logger.error(f"   2. Crie o usuário administrador")
+                    self.logger.error(f"   3. Use o mesmo email/senha que digitou aqui")
+                    self.logger.error(f"   4. Execute o sistema novamente")
                 return False
             elif response.status_code == 404:
                 self.logger.error(f"❌ Portainer não acessível em: {base_url}")

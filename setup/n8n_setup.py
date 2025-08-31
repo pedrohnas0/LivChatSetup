@@ -18,12 +18,27 @@ from setup.redis_setup import RedisSetup
 class N8NSetup(BaseSetup):
     """Setup do N8N com integração Cloudflare"""
     
-    def __init__(self, network_name: str = None):
-        super().__init__("n8n")
+    # Cores para interface (seguindo padrão do projeto)
+    LARANJA = "\033[38;5;173m"  # Orange - Para ASCII art e highlights
+    VERDE = "\033[32m"          # Green - Para success states e selected items
+    BRANCO = "\033[97m"         # Bright white - Para focus states e headings
+    BEGE = "\033[93m"           # Beige - Para informational text e legends
+    VERMELHO = "\033[91m"       # Red - Para errors e warnings
+    CINZA = "\033[90m"          # Gray - Para borders e inactive items
+    RESET = "\033[0m"           # Reset - Always close color sequences
+    
+    def __init__(self, network_name: str = None, config_manager = None):
+        super().__init__("N8N (Workflow Automation)")
         self.service_name = "n8n"
         self.portainer_api = PortainerAPI()
         self.template_engine = TemplateEngine()
         self.network_name = network_name
+        self.config = config_manager or self._get_default_config_manager()
+        
+    def _get_default_config_manager(self):
+        """Carrega ConfigManager se não fornecido"""
+        from utils.config_manager import ConfigManager
+        return ConfigManager()
     
     def validate_prerequisites(self) -> bool:
         """Valida pré-requisitos para o N8N"""
@@ -53,55 +68,120 @@ class N8NSetup(BaseSetup):
             return False
         
         return self.install()
+    
+    def _get_terminal_width(self) -> int:
+        """Obtém largura do terminal de forma segura"""
+        try:
+            import shutil
+            return shutil.get_terminal_size().columns
+        except:
+            return 80  # Fallback
+    
+    def _print_section_box(self, title: str, width: int = None):
+        """Cria box de seção menor seguindo padrão do projeto"""
+        if width is None:
+            terminal_width = self._get_terminal_width()
+            width = min(60, terminal_width - 10)
+        
+        # Remove códigos de cor para calcular tamanho real
+        import re
+        clean_title = re.sub(r'\033\[[0-9;]*m', '', title)
+        
+        line = "─" * (width - 1)
+        print(f"\n{self.CINZA}╭{line}╮{self.RESET}")
+        
+        # Centralização perfeita
+        content_width = width - 2
+        centered_clean = clean_title.center(content_width)
+        
+        # Aplicar cor bege ao título centralizado
+        colored_title = f"{self.BEGE}{clean_title}{self.RESET}"
+        colored_line = centered_clean.replace(clean_title, colored_title)
+            
+        print(f"{self.CINZA}│{colored_line}{self.CINZA}│{self.RESET}")
+        print(f"{self.CINZA}╰{line}╯{self.RESET}")
+    
+    def get_user_input(self, prompt: str, required: bool = False, suggestion: str = None) -> str:
+        """Coleta entrada do usuário com sugestão opcional seguindo padrão do projeto"""
+        try:
+            if suggestion:
+                full_prompt = f"{prompt} (Enter para '{suggestion}' ou digite outro valor)"
+            else:
+                full_prompt = prompt
+                
+            value = input(f"{full_prompt}: ").strip()
+            
+            # Se não digitou nada e há sugestão, usa a sugestão
+            if not value and suggestion:
+                return suggestion
+                
+            if required and not value:
+                self.logger.warning("Valor obrigatório não fornecido")
+                return None
+                
+            return value if value else None
+            
+        except KeyboardInterrupt:
+            print("\nOperação cancelada pelo usuário.")
+            return None
         
     def collect_user_inputs(self):
-        """Coleta informações do usuário para o N8N"""
-        self.logger.info("⚙️  CONFIGURAÇÃO N8N")
+        """Coleta informações do usuário para o N8N seguindo padrão do projeto"""
+        self._print_section_box("⚙️ CONFIGURAÇÃO N8N")
         
-        # Domínio do N8N Editor
+        # Domínio do N8N Editor com sugestão inteligente
+        n8n_suggested_domain = self.config.suggest_domain("n8n")
         while True:
-            n8n_domain = input("Digite o domínio para o N8N Editor (ex: edt.dev.livchat.ai): ").strip()
-            if n8n_domain:
+            n8n_domain = self.get_user_input("Domínio do N8N Editor", suggestion=n8n_suggested_domain)
+            if n8n_domain and '.' in n8n_domain:
                 break
-            print("❌ Domínio é obrigatório!")
+            print(f"{self.VERMELHO}❌ Domínio é obrigatório e deve ser válido!{self.RESET}")
         
-        # Domínio do Webhook
+        # Domínio do Webhook com sugestão inteligente
+        webhook_suggested_domain = self.config.suggest_domain("whk")
         while True:
-            webhook_domain = input("Digite o domínio para o Webhook do N8N (ex: whk.dev.livchat.ai): ").strip()
-            if webhook_domain:
+            webhook_domain = self.get_user_input("Domínio do Webhook do N8N", suggestion=webhook_suggested_domain)
+            if webhook_domain and '.' in webhook_domain:
                 break
-            print("❌ Domínio do webhook é obrigatório!")
+            print(f"{self.VERMELHO}❌ Domínio do webhook é obrigatório e deve ser válido!{self.RESET}")
         
-        # Configurações SMTP
-        smtp_email = input("Digite o Email para SMTP (ex: contato@livchat.ai): ").strip()
-        smtp_user = input("Digite o Usuário para SMTP (ex: contato@livchat.ai): ").strip()
-        smtp_password = input("Digite a Senha SMTP do Email: ").strip()
-        smtp_host = input("Digite o Host SMTP do Email (ex: smtp.hostinger.com): ").strip()
+        self._print_section_box("📧 CONFIGURAÇÃO SMTP")
         
+        # Email padrão baseado na configuração
+        default_email = self.config.get_user_email()
+        
+        # Configurações SMTP com sugestões
+        smtp_email = self.get_user_input("Email SMTP", suggestion=default_email)
+        smtp_user = self.get_user_input("Usuário SMTP", suggestion=smtp_email)
+        smtp_password = self.get_user_input("Senha SMTP", required=True)
+        smtp_host = self.get_user_input("Host SMTP", suggestion="smtp.hostinger.com")
+        
+        # Porta SMTP com validação
         while True:
+            port_input = self.get_user_input("Porta SMTP", suggestion="465")
             try:
-                smtp_port = int(input("Digite a porta SMTP do Email (ex: 465): ").strip())
+                smtp_port = int(port_input) if port_input else 465
                 break
             except ValueError:
-                print("❌ Porta deve ser um número!")
+                print(f"{self.VERMELHO}❌ Porta deve ser um número!{self.RESET}")
         
         # Define SSL baseado na porta
         smtp_secure = "true" if smtp_port == 465 else "false"
         
-        # Confirmação
-        print(f"\n⚙️  CONFIGURAÇÃO N8N")
-        print("─" * 25)
-        print(f"Domínio N8N: {n8n_domain}")
-        print(f"Domínio Webhook: {webhook_domain}")
-        print(f"Email SMTP: {smtp_email}")
-        print(f"Usuário SMTP: {smtp_user}")
-        print(f"Host SMTP: {smtp_host}")
-        print(f"Porta SMTP: {smtp_port}")
-        print(f"SSL SMTP: {smtp_secure}")
+        # Confirmação visual melhorada
+        self._print_section_box("📋 CONFIRMAÇÃO DAS CONFIGURAÇÕES")
+        print(f"{self.VERDE}🌐{self.RESET} Domínio N8N: {self.BRANCO}{n8n_domain}{self.RESET}")
+        print(f"{self.VERDE}🔗{self.RESET} Domínio Webhook: {self.BRANCO}{webhook_domain}{self.RESET}")
+        print(f"{self.VERDE}📧{self.RESET} Email SMTP: {self.BRANCO}{smtp_email}{self.RESET}")
+        print(f"{self.VERDE}👤{self.RESET} Usuário SMTP: {self.BRANCO}{smtp_user}{self.RESET}")
+        print(f"{self.VERDE}🖥️{self.RESET} Host SMTP: {self.BRANCO}{smtp_host}{self.RESET}")
+        print(f"{self.VERDE}🔌{self.RESET} Porta SMTP: {self.BRANCO}{smtp_port}{self.RESET}")
+        print(f"{self.VERDE}🔒{self.RESET} SSL SMTP: {self.BRANCO}{smtp_secure}{self.RESET}")
+        print()
         
-        confirm = input("\nConfirma as configurações? (s/N): ").strip().lower()
-        if confirm != 's':
-            print("❌ Configuração cancelada pelo usuário")
+        confirm = self.get_user_input("Confirmar configurações", suggestion="sim")
+        if confirm and confirm.lower() not in ['sim', 's', 'yes', 'y']:
+            self.logger.info("Instalação cancelada pelo usuário")
             return None
             
         return {
