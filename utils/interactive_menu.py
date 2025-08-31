@@ -404,13 +404,13 @@ class InteractiveMenu:
                 self.selected_index = next_index
                 return True
             
-        # Enter - Executar se há itens selecionados, senão seleciona item atual
+        # Enter - Executar se há itens selecionados, senão seleciona item atual e executa
         elif key == 'ENTER':
             # Se há itens selecionados, executa
             if self.selected_items:
                 return 'CONFIRM'
             
-            # Se não há itens selecionados, seleciona o item atual
+            # Se não há itens selecionados, seleciona o item atual e executa imediatamente
             if self.selected_index < len(current_apps):
                 current_app = current_apps[self.selected_index]
                 current_app_id = current_app["id"]
@@ -422,6 +422,8 @@ class InteractiveMenu:
                     if self.search_term:
                         self.search_term = ""
                         self.selected_index = 0
+                    # Executa imediatamente após selecionar
+                    return 'CONFIRM'
             
             return True
                     
