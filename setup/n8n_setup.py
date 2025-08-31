@@ -504,10 +504,11 @@ class N8NSetup(BaseSetup):
                 
                 self.logger.info("Credenciais de n8n salvas no ConfigManager centralizado")
                 
-                
                 self.logger.info("Instalação do N8N concluída com sucesso")
-                self.logger.info(f"Acesse: https://{user_data['n8n_domain']}")
-                self.logger.info(f"Webhook: https://{user_data['webhook_domain']}")
+                
+                # Sessão de sucesso para configurar conta inicial
+                self._show_success_session(user_data['n8n_domain'])
+                
                 return True
             else:
                 self.logger.error("Falha na instalação do N8N")
@@ -516,3 +517,213 @@ class N8NSetup(BaseSetup):
         except Exception as e:
             self.logger.error(f"Erro durante instalação do N8N: {e}")
             return False
+    
+    def _show_success_session(self, n8n_domain: str):
+        """Exibe sessão de sucesso para configurar conta inicial do N8N"""
+        self._print_section_box("✅ N8N INSTALADO COM SUCESSO!")
+        
+        print(f"{self.VERDE}🌐 URL de Acesso: {self.BRANCO}https://{n8n_domain}{self.RESET}")
+        print()
+        print(f"{self.BEGE}📝 PRÓXIMO PASSO: Configure sua conta de administrador no N8N{self.RESET}")
+        print()
+        
+        # Gera credenciais sugeridas usando ConfigManager
+        suggested_credentials = self._generate_suggested_credentials()
+        
+        print(f"{self.BEGE}👤 DADOS SUGERIDOS PARA A CONTA:{self.RESET}")
+        print(f"   {self.VERDE}•{self.RESET} Email: {self.BRANCO}{suggested_credentials['email']}{self.RESET}")
+        print(f"   {self.VERDE}•{self.RESET} Senha: {self.BRANCO}{suggested_credentials['password']}{self.RESET}")
+        
+        # Só mostra nome se já existe no config
+        if self._has_user_name_configured():
+            print(f"   {self.VERDE}•{self.RESET} Primeiro Nome: {self.BRANCO}{suggested_credentials['first_name']}{self.RESET}")
+            print(f"   {self.VERDE}•{self.RESET} Último Nome: {self.BRANCO}{suggested_credentials['last_name']}{self.RESET}")
+        
+        print()
+        
+        input(f"{self.BEGE}Pressione {self.VERDE}Enter{self.RESET} {self.BEGE}para continuar...{self.RESET}")
+        
+        # Coleta credenciais confirmadas pelo usuário
+        final_credentials = self._collect_n8n_account_data(suggested_credentials)
+        
+        if final_credentials:
+            self._save_n8n_account_credentials(final_credentials)
+            self._show_final_summary(n8n_domain, final_credentials)
+    
+    def _generate_suggested_credentials(self) -> dict:
+        """Gera credenciais sugeridas para conta do N8N"""
+        email = self.config.get_user_email() or "admin@livchat.ai"
+        password = self.config.generate_secure_password(64)  # 64 caracteres como solicitado
+        
+        # Obtém dados do usuário apenas se existirem no config
+        user_data = self.config.config_data["global"]
+        first_name = user_data.get("first_name", "")
+        last_name = user_data.get("last_name", "")
+        
+        # Só inclui nomes se existirem no config (não gera sugestões automáticas)
+        result = {
+            "email": email,
+            "password": password
+        }
+        
+        if first_name:
+            result["first_name"] = first_name
+        if last_name:
+            result["last_name"] = last_name
+        
+        return result
+    
+    def _has_user_name_configured(self) -> bool:
+        """Verifica se há primeiro ou último nome configurado"""
+        user_data = self.config.config_data["global"]
+        return bool(user_data.get("first_name") or user_data.get("last_name"))
+    
+    def _collect_n8n_account_data(self, suggested_credentials: dict) -> dict:
+        """Coleta dados da conta do N8N com sugestões"""
+        self._print_section_box("👤 CONFIGURE SUA CONTA N8N")
+        
+        print(f"{self.BEGE}Confirme os dados para sua conta de administrador no N8N:{self.RESET}")
+        print(f"{self.BEGE}(Enter para aceitar sugestão, outro valor para alterar, ESC para pular campo){self.RESET}")
+        print()
+        
+        # Email
+        email = self._get_user_input_with_escape(
+            "Email", 
+            suggestion=suggested_credentials['email']
+        )
+        
+        # Senha
+        password = self._get_user_input_with_escape(
+            "Senha", 
+            suggestion=suggested_credentials['password']
+        )
+        
+        # Nomes só se já estiverem configurados
+        first_name = None
+        last_name = None
+        
+        if self._has_user_name_configured():
+            # Primeiro nome
+            first_name = self._get_user_input_with_escape(
+                "Primeiro Nome", 
+                suggestion=suggested_credentials['first_name']
+            )
+            
+            # Último nome  
+            last_name = self._get_user_input_with_escape(
+                "Último Nome", 
+                suggestion=suggested_credentials['last_name']
+            )
+        
+        return {
+            "email": email or suggested_credentials['email'],
+            "password": password or suggested_credentials['password'],
+            "first_name": first_name or suggested_credentials.get('first_name', ''),
+            "last_name": last_name or suggested_credentials.get('last_name', '')
+        }
+    
+    def _get_user_input_with_escape(self, prompt: str, suggestion: str = None) -> str:
+        """Versão simplificada de input com sugestão e escape"""
+        try:
+            if suggestion:
+                full_prompt = f"{prompt} (Enter para '{suggestion}', outro valor para alterar, ESC para pular)"
+            else:
+                full_prompt = prompt
+                
+            print(f"{self.BEGE}{full_prompt}:{self.RESET}", end=" ")
+            
+            # Input simples - implementação básica
+            value = input().strip()
+            
+            # Se não digitou nada e há sugestão, usa a sugestão
+            if not value and suggestion:
+                return suggestion
+                
+            return value if value else None
+            
+        except KeyboardInterrupt:
+            print(f"\n{self.VERMELHO}Operação cancelada pelo usuário.{self.RESET}")
+            return None
+    
+    def _save_n8n_account_credentials(self, credentials: dict):
+        """Salva credenciais da conta do N8N"""
+        # Salva dados da conta do usuário no ConfigManager
+        account_data = {
+            'email': credentials['email'],
+            'password': credentials['password'],
+            'first_name': credentials['first_name'],
+            'last_name': credentials['last_name'],
+            'created_at': datetime.now().isoformat()
+        }
+        
+        # Atualiza credenciais do N8N com dados da conta
+        existing_creds = self.config.get_app_credentials('n8n')
+        existing_creds.update({
+            'account_email': credentials['email'],
+            'account_password': credentials['password'],
+            'account_first_name': credentials['first_name'],
+            'account_last_name': credentials['last_name']
+        })
+        self.config.save_app_credentials('n8n', existing_creds)
+        
+        # Atualiza dados globais do usuário se necessário
+        self.config.config_data["global"]["first_name"] = credentials['first_name']
+        self.config.config_data["global"]["last_name"] = credentials['last_name']
+        self.config.save_config()
+        
+        self.logger.info("Dados da conta N8N salvos no ConfigManager")
+    
+    def _show_final_summary(self, n8n_domain: str, credentials: dict):
+        """Exibe resumo final da instalação"""
+        self._print_section_box("🎉 N8N PRONTO PARA USO!")
+        
+        print(f"{self.VERDE}🌐 URL: {self.BRANCO}https://{n8n_domain}{self.RESET}")
+        print(f"{self.VERDE}📧 Email: {self.BRANCO}{credentials['email']}{self.RESET}")
+        
+        # Só mostra nome se houver
+        if credentials.get('first_name') or credentials.get('last_name'):
+            full_name = f"{credentials.get('first_name', '')} {credentials.get('last_name', '')}".strip()
+            if full_name:
+                print(f"{self.VERDE}👤 Nome: {self.BRANCO}{full_name}{self.RESET}")
+        
+        print()
+        print(f"{self.BEGE}📝 INSTRUÇÕES:{self.RESET}")
+        print(f"   {self.VERDE}1.{self.RESET} Acesse {self.BRANCO}https://{n8n_domain}{self.RESET}")
+        print(f"   {self.VERDE}2.{self.RESET} Crie sua conta com os dados confirmados acima")
+        print(f"   {self.VERDE}3.{self.RESET} Comece a criar seus workflows de automação")
+        print()
+        print(f"{self.LARANJA}✨ N8N configurado e pronto para automações!{self.RESET}")
+        print()
+        
+        input(f"{self.BEGE}Pressione {self.VERDE}Enter{self.RESET} {self.BEGE}para instalar mais aplicações ou {self.VERMELHO}Ctrl+C{self.RESET} {self.BEGE}para encerrar...{self.RESET}")
+    
+    def _print_section_box(self, title: str, width: int = None):
+        """Cria box de seção menor seguindo padrão do projeto"""
+        if width is None:
+            terminal_width = self._get_terminal_width()
+            width = min(60, terminal_width - 10)
+        
+        # Remove códigos de cor para calcular tamanho real
+        import re
+        clean_title = re.sub(r'\033\[[0-9;]*m', '', title)
+        
+        line = "─" * (width - 1)
+        print(f"\n{self.CINZA}╭{line}╮{self.RESET}")
+        
+        # Centralização perfeita usando Python nativo
+        content_width = width - 2
+        centered_clean = clean_title.center(content_width)
+        
+        # Aplica cor ao título
+        colored_line = centered_clean.replace(clean_title, f"{self.BEGE}{clean_title}{self.RESET}")
+        
+        print(f"{self.CINZA}│{colored_line}{self.CINZA}│{self.RESET}")
+        print(f"{self.CINZA}╰{line}╯{self.RESET}")
+    
+    def _get_terminal_width(self) -> int:
+        """Obtém largura do terminal"""
+        try:
+            import shutil
+            return shutil.get_terminal_size().columns
+        except:
+            return 80  # Fallback padrão
