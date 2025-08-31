@@ -183,12 +183,14 @@ return f"{subdomain_prefix}.{default_subdomain}.{hostname}"
 ### Current Status
 - **Module Count**: 34 total modules (reduced from 35 after hostname integration)
 - **Infrastructure modules**: Complete and production-ready (basic setup is unified)
-- **Database modules**: Complete (Redis, PostgreSQL+PgVector, MinIO)
-- **Applications**: Chatwoot and Directus are production-ready
-- **Evolution API v2**: Available but in testing
+- **Database modules**: ✅ **Redis e PostgreSQL refatorados e funcionais** 
+- **Applications**: ✅ **N8N completamente refatorado com sessão de sucesso**
+- **Chatwoot/Directus**: Parcialmente refatorados, funcionais mas ainda dependem de alguns `dados_vps`
+- **ConfigManager Migration**: **8/17 módulos refatorados (47% concluído)**
 - **Interactive Experience**: Full TUI menu with search, multi-selection, and post-install options
-- **Configuration Persistence**: All settings stored in livchat-config.json
-- **Other applications**: Available via menu but may need testing
+- **Configuration Persistence**: Migração ativa para livchat-config.json centralizado
+- **Success Sessions**: N8N implementado com padrão Portainer para configuração de conta
+- **Domain Suggestions**: Corrigido para usar zone_name do Cloudflare (não hostname)
 
 ## Configuration Management
 
@@ -455,16 +457,17 @@ echo -e "${cinza}○ 4/15 - Instalando curl${reset}"
 - **[01] basic_setup.py** - Configuração básica (e-mail, hostname, DNS, rede, timezone)
 - **[02] smtp_setup.py** - Configuração SMTP para aplicações 
 - **[05] portainer_setup.py** - Gerenciador Docker Portainer
+- **[06] redis_setup.py** - Cache/Session Store ✨ **REFATORADO**
+- **[07] postgres_setup.py** - Banco relacional ✨ **REFATORADO**
+- **[12] n8n_setup.py** - Workflow Automation ✨ **REFATORADO + SESSÃO DE SUCESSO**
 - **[17] cleanup_setup.py** - Limpeza completa do ambiente
+- **[XX] user_setup.py** - Dados do usuário (módulo oculto) ✨ **NOVO**
 
-### ❌ Módulos Pendentes de Refatoração (12 módulos)
-- **[06] redis_setup.py** - Cache/Session Store
-- **[07] postgres_setup.py** - Banco relacional
+### ❌ Módulos Pendentes de Refatoração (9 módulos)
 - **[08] pgvector_setup.py** - Banco vetorial
 - **[09] minio_setup.py** - S3 Compatible Storage
-- **[10] chatwoot_setup.py** - Customer Support Platform
+- **[10] chatwoot_setup.py** - Customer Support Platform (parcialmente refatorado)
 - **[11] directus_setup.py** - Headless CMS
-- **[12] n8n_setup.py** - Workflow Automation
 - **[13] grafana_setup.py** - Stack de monitoramento
 - **[14] gowa_setup.py** - WhatsApp API Multi Device
 - **[15] livchatbridge_setup.py** - Webhook Connector
@@ -559,28 +562,20 @@ def _get_domain_input(self, service_name: str) -> str:
 
 ## Pontos de Ajuste Específicos por Arquivo
 
-### 📦 redis_setup.py
-**Linhas para alterar:**
-- `L199`: `with open("/root/dados_vps/dados_redis", 'w') as f:` → `self.config.save_app_credentials('redis', credentials)`
-- `L202`: `self.logger.info("Credenciais salvas em /root/dados_vps/dados_redis")` → `self.logger.info("Credenciais salvas no ConfigManager")`
-- `L244`: Mesmo padrão da linha 202
+### ✅ redis_setup.py - **REFATORADO COMPLETAMENTE**
+**✅ Alterações implementadas:**
+- ✅ `ConfigManager` integrado no construtor
+- ✅ Escrita manual de arquivo substituída por `save_app_credentials()`
+- ✅ Logs atualizados para referenciar ConfigManager
+- ✅ Migração completa para configuração centralizada
 
-**Refatoração necessária:**
-1. Adicionar `ConfigManager` no construtor
-2. Substituir escrita manual de arquivo por `save_app_credentials()`
-3. Implementar sistema de sugestões para domínio Redis
-4. Migração automática de `/root/dados_vps/dados_redis` existente
-
-### 📦 postgres_setup.py  
-**Linhas para alterar:**
-- `L203-206`: Bloco de escrita para arquivo → `self.config.save_app_credentials('postgres', credentials)`
-- `L248`: Log de confirmação → Atualizar mensagem
-
-**Refatoração necessária:**
-1. Adicionar `ConfigManager` no construtor
-2. Substituir `open("/root/dados_vps/dados_postgres", 'w')` por métodos ConfigManager
-3. Implementar migração de dados antigos
-4. Sistema de sugestões para senha e configurações
+### ✅ postgres_setup.py - **REFATORADO COMPLETAMENTE**
+**✅ Alterações implementadas:**
+- ✅ `ConfigManager` integrado no construtor
+- ✅ Bloco de escrita para arquivo substituído por métodos ConfigManager
+- ✅ Sistema de geração de senhas seguras via ConfigManager
+- ✅ Configuração e credenciais salvas separadamente
+- ✅ Logs de confirmação atualizados
 
 ### 📦 pgvector_setup.py
 **Linhas para alterar:**
@@ -622,18 +617,22 @@ def _get_domain_input(self, service_name: str) -> str:
 3. Implementar salvamento de credenciais Directus
 4. Sistema de sugestões para configurações
 
-### 📦 n8n_setup.py
-**Linhas para alterar:**
-- `L258`: `with open('/root/dados_vps/dados_postgres', 'r') as f:` → `self.config.get_app_credentials('postgres')`
-- `L274`: `with open('/root/dados_vps/dados_redis', 'r') as f:` → `self.config.get_app_credentials('redis')`
-- `L463`: `with open("/root/dados_vps/dados_n8n", 'w', encoding='utf-8') as f:` → `self.config.save_app_credentials('n8n', credentials)`
-- `L465`: Atualizar log de confirmação
+### ✅ n8n_setup.py - **REFATORADO COMPLETAMENTE**
+**✅ Alterações implementadas:**
+- ✅ `ConfigManager` integrado no construtor
+- ✅ Todas as leituras manuais de arquivos substituídas por métodos ConfigManager
+- ✅ Sistema de sugestões para domínios N8N (usa Cloudflare zone_name)
+- ✅ Database `n8n_queue` dedicada com limpeza automática
+- ✅ **Sessão de sucesso** implementada seguindo padrão Portainer
+- ✅ **Configuração de conta** com credenciais sugeridas (email + senha 64 chars)
+- ✅ **Suporte a primeiro/último nome** (condicional - só se configurado)
+- ✅ Migração completa para ConfigManager centralizado
 
-**Refatoração necessária:**
-1. Adicionar ConfigManager no construtor (já parcialmente implementado)
-2. Substituir todas as leituras manuais de arquivos
-3. Sistema de sugestões para domínios N8N (editor e webhook)
-4. Migração de dados antigos
+**🎯 Funcionalidades especiais:**
+- **Limpeza de database**: Remove databases antigas para evitar conflitos de migração
+- **Domain suggestion fix**: Usa `zone_name` em vez de `hostname` 
+- **Success session**: Interface igual ao Portainer para configurar conta inicial
+- **User data**: Integração com `user_setup.py` para dados pessoais opcionais
 
 ### 📦 evolution_setup.py
 **Linhas para alterar:**
@@ -732,11 +731,45 @@ cat /root/livchat-config.json | jq '.'
 ls -la /root/dados_vps/
 ```
 
+## ✨ Recursos Implementados Recentemente
+
+### 🎯 Sessão de Sucesso (Success Session Pattern)
+**Implementado no N8N, baseado no padrão do Portainer:**
+- **Tela de sucesso** com informações da instalação
+- **Credenciais sugeridas** automáticas (email + senha 64 caracteres)
+- **Confirmação interativa** com padrão Enter/Valor/ESC
+- **Dados de usuário opcionais** (primeiro/último nome)
+- **Resumo final** com instruções de uso
+- **Integração ConfigManager** para persistir dados da conta
+
+### 🔧 Domain Suggestion Fix
+**Correção crítica na sugestão de domínios:**
+- **Problema**: Domínios sugeridos como `app.dev.localhost` 
+- **Solução**: Usar `zone_name` do Cloudflare (ex: `app.dev.livchat.ai`)
+- **Pattern correto**: `self.config.suggest_domain("app_name")` 
+- **Fallback seguro**: hostname apenas se zone_name não disponível
+
+### 👤 User Setup Module
+**Novo módulo oculto para dados pessoais:**
+- **Arquivo**: `setup/user_setup.py` (sem número no menu)
+- **Função**: Gerenciar primeiro nome e último nome
+- **Integração**: Usado por outras aplicações que necessitam
+- **Comportamento**: Enter aceita sugestão, ESC pula campo
+- **Storage**: Dados salvos em `livchat-config.json`
+
+### 🛠️ Database Cleanup
+**N8N com limpeza automática de databases:**
+- **Remove databases antigas** antes de criar nova
+- **Desconecta usuários ativos** automaticamente  
+- **Cria database `n8n_queue` limpa** para evitar conflitos
+- **Suporte a migração** sem conflitos de schema
+
 ## Notas Importantes
 
-1. **Migração Automática**: Todos os módulos refatorados devem implementar migração automática dos arquivos `dados_vps` existentes
-2. **Compatibilidade**: Durante o período de transição, alguns módulos podem ainda depender de `dados_vps` 
-3. **Sistema de Sugestões**: Implementar sugestões inteligentes baseadas em configurações existentes
-4. **Timestamping**: Adicionar `created_at` e `configured_at` em todas as configurações salvas
-5. **Validação**: Verificar se ConfigManager está funcional antes de usar métodos
-6. **Backup**: Manter backup dos dados_vps durante migração para rollback se necessário
+1. **Migração Automática**: Todos os módulos refatorados implementam migração automática dos arquivos `dados_vps` existentes
+2. **Compatibilidade**: Durante período de transição, alguns módulos ainda dependem de `dados_vps` 
+3. **Sistema de Sugestões**: Implementado com sugestões inteligentes baseadas em configurações existentes
+4. **Timestamping**: Adicionado `created_at` e `configured_at` em todas as configurações salvas
+5. **Domain Corrections**: Corrigido para usar zone_name do Cloudflare em todos os módulos refatorados
+6. **Success Sessions**: N8N implementa padrão completo de sessão pós-instalação
+7. **User Data**: Sistema opcional e condicional para dados pessoais do usuário
