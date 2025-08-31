@@ -90,14 +90,17 @@ class N8NSetup(BaseSetup):
         line = "─" * (width - 1)
         print(f"\n{self.CINZA}╭{line}╮{self.RESET}")
         
-        # Centralização perfeita usando Python nativo
+        # Centralização padrão (mantém original)
         content_width = width - 2
         centered_clean = clean_title.center(content_width)
         
         # Aplicar cor bege ao título centralizado
         colored_line = centered_clean.replace(clean_title, f"{self.BEGE}{clean_title}{self.RESET}")
-            
-        print(f"{self.CINZA}│{colored_line}{self.CINZA}│{self.RESET}")
+        
+        # Adicionar 2 espaços extras antes da borda direita para movê-la 2 posições para direita
+        extra_spaces = "  "  # 2 espaços para mover borda direita
+        
+        print(f"{self.CINZA}│{colored_line}{extra_spaces}{self.CINZA}│{self.RESET}")
         print(f"{self.CINZA}╰{line}╯{self.RESET}")
     
     def get_user_input(self, prompt: str, required: bool = False, suggestion: str = None) -> str:
@@ -144,44 +147,85 @@ class N8NSetup(BaseSetup):
                 break
             print(f"{self.VERMELHO}❌ Domínio do webhook é obrigatório e deve ser válido!{self.RESET}")
         
-        self._print_section_box("📧 CONFIGURAÇÃO SMTP")
+        # Obtém configuração SMTP do ConfigManager
+        smtp_config = self.config.get_app_config("smtp")
+        if not smtp_config or not smtp_config.get("configured", False):
+            self._print_section_box("⚠️  SMTP NÃO CONFIGURADO")
+            print(f"{self.VERMELHO}❌ N8N precisa de configuração SMTP para envio de emails!{self.RESET}")
+            print(f"{self.BEGE}Configure o SMTP primeiro no menu principal (item 2).{self.RESET}")
+            print()
+            
+            configure_now = self.get_user_input("Deseja configurar SMTP agora", suggestion="sim")
+            if configure_now and configure_now.lower() in ['sim', 's', 'yes', 'y']:
+                from setup.smtp_setup import SMTPSetup
+                smtp_setup = SMTPSetup(config_manager=self.config)
+                if not smtp_setup.run():
+                    print(f"{self.VERMELHO}❌ Falha na configuração SMTP. N8N não pode prosseguir.{self.RESET}")
+                    return None
+                # Recarrega configuração após setup
+                smtp_config = self.config.get_app_config("smtp")
+            else:
+                print(f"{self.VERMELHO}❌ N8N cancelado. Configure SMTP primeiro.{self.RESET}")
+                return None
         
-        # Email padrão baseado na configuração
-        default_email = self.config.get_user_email()
+        self._print_section_box("✅ SMTP CONFIGURADO")
+        print(f"{self.VERDE}📧{self.RESET} Servidor: {smtp_config['smtp_host']}:{smtp_config['smtp_port']}")
+        print(f"{self.VERDE}📨{self.RESET} Remetente: {smtp_config['sender_email']}")
+        print()
         
-        # Configurações SMTP com sugestões
-        smtp_email = self.get_user_input("Email SMTP", suggestion=default_email)
-        smtp_user = self.get_user_input("Usuário SMTP", suggestion=smtp_email)
-        smtp_password = self.get_user_input("Senha SMTP", required=True)
-        smtp_host = self.get_user_input("Host SMTP", suggestion="smtp.hostinger.com")
-        
-        # Porta SMTP com validação
-        while True:
-            port_input = self.get_user_input("Porta SMTP", suggestion="465")
-            try:
-                smtp_port = int(port_input) if port_input else 465
-                break
-            except ValueError:
-                print(f"{self.VERMELHO}❌ Porta deve ser um número!{self.RESET}")
-        
-        # Define SSL baseado na porta
-        smtp_secure = "true" if smtp_port == 465 else "false"
+        # Converte configurações para formato do N8N
+        smtp_email = smtp_config['sender_email']
+        smtp_user = smtp_config['smtp_username']
+        smtp_password = smtp_config['smtp_password']
+        smtp_host = smtp_config['smtp_host']
+        smtp_port = smtp_config['smtp_port']
+        smtp_secure = smtp_config['smtp_ssl']
         
         # Confirmação visual melhorada
         self._print_section_box("📋 CONFIRMAÇÃO DAS CONFIGURAÇÕES")
         print(f"{self.VERDE}🌐{self.RESET} Domínio N8N: {self.BRANCO}{n8n_domain}{self.RESET}")
         print(f"{self.VERDE}🔗{self.RESET} Domínio Webhook: {self.BRANCO}{webhook_domain}{self.RESET}")
-        print(f"{self.VERDE}📧{self.RESET} Email SMTP: {self.BRANCO}{smtp_email}{self.RESET}")
-        print(f"{self.VERDE}👤{self.RESET} Usuário SMTP: {self.BRANCO}{smtp_user}{self.RESET}")
-        print(f"{self.VERDE}🖥️{self.RESET} Host SMTP: {self.BRANCO}{smtp_host}{self.RESET}")
-        print(f"{self.VERDE}🔌{self.RESET} Porta SMTP: {self.BRANCO}{smtp_port}{self.RESET}")
-        print(f"{self.VERDE}🔒{self.RESET} SSL SMTP: {self.BRANCO}{smtp_secure}{self.RESET}")
         print()
+        print(f"{self.BEGE}📧 SMTP (obtido da configuração centralizada):{self.RESET}")
+        print(f"{self.VERDE}  📨{self.RESET} Servidor: {self.BRANCO}{smtp_host}:{smtp_port}{self.RESET}")
+        print(f"{self.VERDE}  📧{self.RESET} Remetente: {self.BRANCO}{smtp_email}{self.RESET}")
+        ssl_method = "SSL/TLS" if smtp_secure == "true" else "STARTTLS"
+        print(f"{self.VERDE}  🔒{self.RESET} Segurança: {self.BRANCO}{ssl_method}{self.RESET}")
+        print()
+        print(f"{self.BEGE}Pressione {self.VERDE}Enter{self.BEGE} para confirmar · {self.VERMELHO}Esc{self.BEGE} para corrigir dados{self.RESET}")
         
-        confirm = self.get_user_input("Confirmar configurações", suggestion="sim")
-        if confirm and confirm.lower() not in ['sim', 's', 'yes', 'y']:
-            self.logger.info("Instalação cancelada pelo usuário")
-            return None
+        try:
+            import termios
+            import tty
+            import sys
+            
+            old_settings = termios.tcgetattr(sys.stdin.fileno())
+            try:
+                tty.setcbreak(sys.stdin.fileno())
+                while True:
+                    key = sys.stdin.read(1)
+                    
+                    if ord(key) == 10 or ord(key) == 13:  # Enter
+                        print("✅ Configurações confirmadas!")
+                        break
+                    elif ord(key) == 27:  # Esc
+                        print("❌ Voltando para corrigir dados...")
+                        self.logger.info("Usuário solicitou correção das configurações")
+                        return None
+                    elif key.lower() == 'q':  # Q para quit
+                        print("❌ Configuração cancelada")
+                        self.logger.info("Instalação cancelada pelo usuário")
+                        return None
+                        
+            finally:
+                termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, old_settings)
+                
+        except ImportError:
+            # Fallback para sistemas sem termios
+            confirm = input("Confirmar? (Enter=Sim, N=Não): ").strip()
+            if confirm and confirm.lower() not in ['', 'sim', 's', 'yes', 'y']:
+                self.logger.info("Instalação cancelada pelo usuário")
+                return None
             
         return {
             'n8n_domain': n8n_domain,
@@ -323,10 +367,15 @@ class N8NSetup(BaseSetup):
     def install(self):
         """Instala o N8N"""
         try:
-            # Coleta dados do usuário
-            user_data = self.collect_user_inputs()
-            if not user_data:
-                return False
+            # Loop de coleta e confirmação de configurações
+            while True:
+                # Coleta dados do usuário
+                user_data = self.collect_user_inputs()
+                if not user_data:
+                    return False
+                
+                # Se chegou até aqui, os dados foram confirmados
+                break
             
             self.logger.info("Iniciando instalação do N8N...")
             

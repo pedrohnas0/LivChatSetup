@@ -539,7 +539,7 @@ class PortainerSetup(BaseSetup):
     
     def _handle_manual_account_creation_required(self, credentials: dict) -> bool:
         """Gerencia criação manual da conta quando auto_mode falha na validação"""
-        self._print_section_box("⚠️ AÇÃO NECESSÁRIA: CRIAR CONTA MANUALMENTE")
+        self._print_section_box("⚠️  AÇÃO NECESSÁRIA: CRIAR CONTA MANUALMENTE")
         
         print(f"{self.VERMELHO}❌ PROBLEMA DETECTADO:{self.RESET}")
         print(f"   O Portainer foi instalado mas ainda não tem uma conta de administrador criada.")

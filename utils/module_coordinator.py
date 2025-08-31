@@ -17,6 +17,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import setup_logging
 from utils.config_manager import ConfigManager
 from setup.basic_setup import BasicSetup
+from setup.smtp_setup import SMTPSetup
 from setup.docker_setup import DockerSetup
 from setup.traefik_setup import TraefikSetup
 from setup.portainer_setup import PortainerSetup
@@ -110,6 +111,37 @@ class ModuleCoordinator:
         print(f"{self.CINZA}│{colored_line}{self.CINZA}│{self.RESET}")
         print(f"{self.CINZA}╰{line}╯{self.RESET}")
     
+    def _print_error_box(self, title: str, width: int = None):
+        """Cria box de erro com tratamento correto de emoji"""
+        if width is None:
+            terminal_width = self._get_terminal_width()
+            width = min(60, terminal_width - 10)
+        
+        # Remove códigos de cor para calcular tamanho real
+        import re
+        clean_title = re.sub(r'\033\[[0-9;]*m', '', title)
+        
+        # Calcula largura visual considerando que emojis ocupam 2 espaços visuais
+        # mas contam como 1 no len()
+        emoji_count = len([c for c in clean_title if ord(c) > 127])
+        visual_length = len(clean_title) + emoji_count
+        
+        line = "─" * (width - 1)
+        print(f"\n{self.CINZA}╭{line}╮{self.RESET}")
+        
+        # Centralização corrigida para emojis
+        content_width = width - 2
+        text_padding = (content_width - visual_length) // 2
+        right_padding = content_width - visual_length - text_padding
+        
+        # Aplicar cor laranja/vermelho para erro
+        colored_title = f"{self.VERMELHO}{clean_title}{self.RESET}"
+        padding_left = " " * text_padding
+        padding_right = " " * right_padding
+        
+        print(f"{self.CINZA}│{padding_left}{colored_title}{padding_right}{self.CINZA}│{self.RESET}")
+        print(f"{self.CINZA}╰{line}╯{self.RESET}")
+    
     def _clear_lines(self, count: int):
         """Limpa linhas específicas em vez de limpar toda a tela"""
         for _ in range(count):
@@ -129,6 +161,7 @@ class ModuleCoordinator:
         
         # Mapeamento de dependências
         self.dependencies = {
+            'smtp': ['basic'],
             'docker': ['basic'],
             'traefik': ['docker'],
             'portainer': ['traefik'],  # Portainer precisa do Traefik para SSL
@@ -136,11 +169,11 @@ class ModuleCoordinator:
             'postgres': ['portainer'],  # Todos os serviços via API precisam do Portainer
             'pgvector': ['portainer'],  # Todos os serviços via API precisam do Portainer
             'minio': ['portainer'],     # Todos os serviços via API precisam do Portainer
-            'chatwoot': ['traefik', 'pgvector'],
+            'chatwoot': ['traefik', 'pgvector', 'smtp'],
             'directus': ['traefik', 'pgvector'], 
-            'n8n': ['traefik', 'postgres'],
+            'n8n': ['traefik', 'postgres', 'smtp'],
             'grafana': ['traefik'],
-            'passbolt': ['traefik', 'postgres'],
+            'passbolt': ['traefik', 'postgres', 'smtp'],
             'evolution': ['traefik', 'postgres', 'redis'],
             'gowa': ['traefik'],
             'livchatbridge': ['traefik']
@@ -148,7 +181,7 @@ class ModuleCoordinator:
         
         # Ordem de instalação (infraestrutura primeiro)
         self.install_order = [
-            'basic', 'docker', 'traefik', 'portainer',
+            'basic', 'smtp', 'docker', 'traefik', 'portainer',
             'redis', 'postgres', 'pgvector', 'minio'
         ]
     
@@ -494,6 +527,9 @@ class ModuleCoordinator:
                 basic_setup = BasicSetup(config_manager=self.config)
                 return basic_setup.run()
             
+            elif module_name == 'smtp':
+                smtp_setup = SMTPSetup(config_manager=self.config)
+                return smtp_setup.run()
             
             elif module_name == 'docker':
                 docker_setup = DockerSetup()
@@ -628,6 +664,10 @@ class ModuleCoordinator:
         basic_setup = BasicSetup(config_manager=self.config)
         return basic_setup.run()
     
+    def run_smtp_setup(self) -> bool:
+        """Executa configuração SMTP"""
+        smtp_setup = SMTPSetup(config_manager=self.config)
+        return smtp_setup.run()
     
     def run_docker_setup(self) -> bool:
         """Executa instalação do Docker"""
@@ -879,7 +919,7 @@ class ModuleCoordinator:
         """Mostra erro de dependência com sugestões"""
         
         # Box de erro com estilo consistente
-        self._print_section_box("⚠️ FALHA EM DEPENDÊNCIA CRÍTICA", 60)
+        self._print_error_box("⚠️  FALHA EM DEPENDÊNCIA CRÍTICA")
         
         print(f"{self.VERMELHO}❌ MÓDULO FALHADO:{self.RESET}")
         print(f"   {self.get_module_display_name(failed_module)}")
@@ -1122,6 +1162,7 @@ class ModuleCoordinator:
         """Retorna mapeamento de módulos disponíveis"""
         return {
             'basic': ('Setup Básico', lambda: self.run_basic_setup()),
+            'smtp': ('Configuração SMTP', lambda: self.run_smtp_setup()),
             'docker': ('Docker', lambda: self.run_docker_setup()),
             'traefik': ('Traefik', lambda: self.run_traefik_setup(self.args.email)),
             'portainer': ('Portainer', lambda: self.run_portainer_setup(self.args.portainer_domain)),
@@ -1156,7 +1197,7 @@ class ModuleCoordinator:
                 return False
         else:
             # Executa módulos principais (exceto cleanup)
-            main_modules = ['basic', 'docker', 'traefik', 'portainer', 'redis', 'postgres', 'pgvector', 'minio']
+            main_modules = ['basic', 'smtp', 'docker', 'traefik', 'portainer', 'redis', 'postgres', 'pgvector', 'minio']
             
             for module_key in main_modules:
                 if module_key in module_map:
