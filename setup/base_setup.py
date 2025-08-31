@@ -7,6 +7,7 @@ import subprocess
 import sys
 import os
 import logging
+import unicodedata
 from datetime import datetime
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
@@ -163,3 +164,27 @@ class BaseSetup(ABC):
     def get_duration(self) -> float:
         """Retorna a duração total da execução"""
         return (datetime.now() - self.start_time).total_seconds()
+    
+    def get_display_width(self, text: str) -> int:
+        """Calcula largura visual real considerando emojis e caracteres especiais"""
+        width = 0
+        for char in text:
+            # East Asian characters (incluindo emojis) são tipicamente 2 unidades de largura
+            if unicodedata.east_asian_width(char) in ('F', 'W'):
+                width += 2
+            # Variation selectors são de largura zero
+            elif unicodedata.combining(char) or ord(char) == 65039:  # variation selector-16
+                width += 0
+            # Caracteres normais
+            else:
+                width += 1
+        return width
+    
+    def center_text_with_display_width(self, text: str, total_width: int, padding_adjustment: int = 0) -> str:
+        """Centraliza texto considerando largura de caracteres"""
+        # Use len() instead of display_width for better terminal compatibility  
+        text_length = len(text)
+        if text_length >= total_width:
+            return text
+        padding = ((total_width - text_length) // 2) + padding_adjustment
+        return ' ' * padding + text + ' ' * (total_width - text_length - padding)

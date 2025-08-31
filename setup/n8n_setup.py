@@ -90,13 +90,12 @@ class N8NSetup(BaseSetup):
         line = "─" * (width - 1)
         print(f"\n{self.CINZA}╭{line}╮{self.RESET}")
         
-        # Centralização perfeita
-        content_width = width - 2
-        centered_clean = clean_title.center(content_width)
+        # Centralização perfeita usando largura visual  
+        content_width = width
+        centered_clean = self.center_text_with_display_width(clean_title, content_width)
         
         # Aplicar cor bege ao título centralizado
-        colored_title = f"{self.BEGE}{clean_title}{self.RESET}"
-        colored_line = centered_clean.replace(clean_title, colored_title)
+        colored_line = centered_clean.replace(clean_title, f"{self.BEGE}{clean_title}{self.RESET}")
             
         print(f"{self.CINZA}│{colored_line}{self.CINZA}│{self.RESET}")
         print(f"{self.CINZA}╰{line}╯{self.RESET}")
@@ -127,7 +126,7 @@ class N8NSetup(BaseSetup):
         
     def collect_user_inputs(self):
         """Coleta informações do usuário para o N8N seguindo padrão do projeto"""
-        self._print_section_box("⚙️ CONFIGURAÇÃO N8N")
+        self._print_section_box("⚙️  CONFIGURAÇÃO N8N")
         
         # Domínio do N8N Editor com sugestão inteligente
         n8n_suggested_domain = self.config.suggest_domain("n8n")

@@ -118,13 +118,12 @@ class PortainerSetup(BaseSetup):
         line = "─" * (width - 1)
         print(f"\n{self.CINZA}╭{line}╮{self.RESET}")
         
-        # Centralização perfeita
+        # Centralização perfeita usando largura visual
         content_width = width - 2
-        centered_clean = clean_title.center(content_width)
+        centered_clean = self.center_text_with_display_width(clean_title, content_width)
         
         # Aplicar cor bege ao título centralizado
-        colored_title = f"{self.BEGE}{clean_title}{self.RESET}"
-        colored_line = centered_clean.replace(clean_title, colored_title)
+        colored_line = centered_clean.replace(clean_title, f"{self.BEGE}{clean_title}{self.RESET}")
             
         print(f"{self.CINZA}│{colored_line}{self.CINZA}│{self.RESET}")
         print(f"{self.CINZA}╰{line}╯{self.RESET}")
