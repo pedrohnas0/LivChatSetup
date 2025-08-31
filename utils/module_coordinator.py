@@ -30,7 +30,6 @@ from setup.chatwoot_setup import ChatwootSetup
 from setup.n8n_setup import N8NSetup
 from setup.grafana_setup import GrafanaSetup
 from setup.gowa_setup import GowaSetup
-from setup.livchatbridge_setup import LivChatBridgeSetup
 from setup.directus_setup import DirectusSetup
 from setup.passbolt_setup import PassboltSetup
 from setup.evolution_setup import EvolutionSetup
@@ -176,7 +175,6 @@ class ModuleCoordinator:
             'passbolt': ['traefik', 'postgres', 'smtp'],
             'evolution': ['traefik', 'postgres', 'redis'],
             'gowa': ['traefik'],
-            'livchatbridge': ['traefik']
         }
         
         # Ordem de instalação (infraestrutura primeiro)
@@ -640,13 +638,6 @@ class ModuleCoordinator:
                 gowa_setup = GowaSetup(network_name=self.args.network_name)
                 return gowa_setup.run()
             
-            elif module_name == 'livchatbridge':
-                if not self.ensure_network_name():
-                    self.logger.warning("Nome da rede não definido. Pulando instalação do LivChatBridge.")
-                    return True
-                livchatbridge_setup = LivChatBridgeSetup(network_name=self.args.network_name)
-                return livchatbridge_setup.run_setup()
-            
             elif module_name == 'cleanup':
                 cleanup_setup = CleanupSetup()
                 return cleanup_setup.run()
@@ -1020,7 +1011,6 @@ class ModuleCoordinator:
             'n8n': 'N8N (Workflow Automation)',
             'grafana': 'Grafana (Stack de Monitoramento)',
             'gowa': 'GOWA (WhatsApp API Multi Device)',
-            'livchatbridge': 'LivChatBridge (Webhook Connector)',
             'passbolt': 'Passbolt (Password Manager)',
             'evolution': 'Evolution API v2 (WhatsApp API)',
             'cleanup': 'Limpeza Completa do Ambiente'
@@ -1144,14 +1134,6 @@ class ModuleCoordinator:
         gowa_setup = GowaSetup(network_name=self.args.network_name)
         return gowa_setup.run()
     
-    def run_livchatbridge_setup(self) -> bool:
-        """Executa setup do LivChatBridge"""
-        if not self.ensure_network_name():
-            self.logger.warning("Nome da rede não definido. Pulando instalação do LivChatBridge.")
-            return True
-        livchatbridge_setup = LivChatBridgeSetup(network_name=self.args.network_name)
-        return livchatbridge_setup.run_setup()
-    
     def run_cleanup_setup(self) -> bool:
         """Executa limpeza completa"""
         # Deixe a confirmação ser feita pelo próprio módulo CleanupSetup
@@ -1176,7 +1158,6 @@ class ModuleCoordinator:
             'n8n': ('N8N', lambda: self.run_n8n_setup()),
             'grafana': ('Grafana', lambda: self.run_grafana_setup()),
             'gowa': ('GOWA', lambda: self.run_gowa_setup()),
-            'livchatbridge': ('LivChatBridge', lambda: self.run_livchatbridge_setup()),
             'cleanup': ('Limpeza', lambda: self.run_cleanup_setup())
         }
     

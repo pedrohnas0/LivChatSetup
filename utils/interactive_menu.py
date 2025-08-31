@@ -37,24 +37,24 @@ class InteractiveMenu:
         
         # Lista de aplicações disponíveis (34 itens)
         self.apps = [
-            {"id": "basic", "name": "Config (E-mail, Hostname, Cloudflare, Rede, Timezone)", "category": "infra"},
-            {"id": "smtp", "name": "Configuração SMTP (Email para Aplicações)", "category": "infra"},
-            {"id": "docker", "name": "Instalação do Docker + Swarm", "category": "infra"},
-            {"id": "traefik", "name": "Instalação do Traefik (Proxy Reverso)", "category": "infra"},
-            {"id": "portainer", "name": "Instalação do Portainer (Gerenciador Docker)", "category": "infra"},
-            {"id": "redis", "name": "Redis (Cache/Session Store)", "category": "database"},
-            {"id": "postgres", "name": "PostgreSQL (Banco Relacional)", "category": "database"},
-            {"id": "pgvector", "name": "PostgreSQL + PgVector (Banco Vetorial)", "category": "database"},
-            {"id": "minio", "name": "MinIO (S3 Compatible Storage)", "category": "storage"},
-            {"id": "chatwoot", "name": "Chatwoot (Customer Support Platform)", "category": "app"},
+            {"id": "basic", "name": "Basic Setup (E-mail, Hostname, Cloudflare, Rede, Timezone)", "category": "infra"},
+            {"id": "smtp", "name": "SMTP Setup (Configuração de Email)", "category": "infra"},
+            {"id": "docker", "name": "Docker Swarm (Instalação e Configuração)", "category": "infra"},
+            {"id": "traefik", "name": "Traefik (Proxy Reverso com SSL)", "category": "infra"},
+            {"id": "portainer", "name": "Portainer (Gerenciador Docker)", "category": "infra"},
+            {"id": "redis", "name": "Redis (Cache e Session Store)", "category": "database"},
+            {"id": "postgres", "name": "PostgreSQL (Banco de Dados Relacional)", "category": "database"},
+            {"id": "pgvector", "name": "PgVector (Extensão Vetorial PostgreSQL)", "category": "database"},
+            {"id": "minio", "name": "MinIO (Armazenamento S3 Compatible)", "category": "storage"},
+            {"id": "chatwoot", "name": "Chatwoot (Plataforma de Suporte)", "category": "app"},
             {"id": "directus", "name": "Directus (Headless CMS)", "category": "app"},
-            {"id": "n8n", "name": "N8N (Workflow Automation)", "category": "app"},
-            {"id": "grafana", "name": "Grafana (Stack de Monitoramento)", "category": "app"},
+            {"id": "n8n", "name": "N8N (Automação de Workflows)", "category": "app"},
+            {"id": "grafana", "name": "Grafana (Monitoramento e Métricas)", "category": "app"},
             {"id": "gowa", "name": "GOWA (WhatsApp API Multi Device)", "category": "app"},
-            {"id": "livchatbridge", "name": "LivChatBridge (Webhook Connector)", "category": "app"},
-            {"id": "passbolt", "name": "Passbolt (Password Manager)", "category": "app"},
-            {"id": "cleanup", "name": "Limpeza Completa do Ambiente", "category": "util"},
-            {"id": "evolution", "name": "Evolution API v2 (WhatsApp API)", "category": "app"},
+            {"id": "passbolt", "name": "Passbolt (Gerenciador de Senhas)", "category": "app"},
+            {"id": "evolution", "name": "Evolution API (WhatsApp API v2)", "category": "app"},
+            {"id": "cleanup", "name": "Cleanup (Limpeza Completa do Ambiente)", "category": "util"},
+            {"id": "em_breve_18", "name": "Em breve", "category": "future"},
             {"id": "em_breve_19", "name": "Em breve", "category": "future"},
             {"id": "em_breve_20", "name": "Em breve", "category": "future"},
             {"id": "em_breve_21", "name": "Em breve", "category": "future"},
@@ -70,8 +70,7 @@ class InteractiveMenu:
             {"id": "em_breve_31", "name": "Em breve", "category": "future"},
             {"id": "em_breve_32", "name": "Em breve", "category": "future"},
             {"id": "em_breve_33", "name": "Em breve", "category": "future"},
-            {"id": "em_breve_34", "name": "Em breve", "category": "future"},
-            {"id": "em_breve_35", "name": "Em breve", "category": "future"}
+            {"id": "em_breve_34", "name": "Em breve", "category": "future"}
         ]
         
         # Para controle de terminal não-bloqueante
