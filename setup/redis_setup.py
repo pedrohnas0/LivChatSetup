@@ -5,15 +5,18 @@ import logging
 import secrets
 import string
 import os
+from datetime import datetime
 from .base_setup import BaseSetup
 from utils.template_engine import TemplateEngine
 from utils.portainer_api import PortainerAPI
+from utils.config_manager import ConfigManager
 
 class RedisSetup(BaseSetup):
-    def __init__(self, network_name: str = None):
+    def __init__(self, network_name: str = None, config_manager: ConfigManager = None):
         super().__init__("Instalação do Redis")
         self.redis_password = None
         self.network_name = network_name
+        self.config = config_manager or ConfigManager()
 
     def validate_prerequisites(self) -> bool:
         """Valida pré-requisitos"""
@@ -182,28 +185,26 @@ class RedisSetup(BaseSetup):
         """Salva as credenciais do Redis"""
         self.logger.info("Salvando credenciais do Redis")
         
-        credentials = f"""[ REDIS ]
-
-Dominio do Redis: redis://redis:6379
-
-Usuario: default
-Senha: {self.redis_password}
-
-Conexão interna: redis://:${self.redis_password}@redis:6379
-"""
+        # Salva configuração do Redis no ConfigManager
+        config_data = {
+            'host': 'redis',
+            'port': 6379,
+            'configured_at': datetime.now().isoformat()
+        }
+        self.config.save_app_config('redis', config_data)
         
-        try:
-            # Cria diretório se não existir
-            os.makedirs("/root/dados_vps", exist_ok=True)
-            
-            with open("/root/dados_vps/dados_redis", 'w') as f:
-                f.write(credentials)
-            
-            self.logger.info("Credenciais salvas em /root/dados_vps/dados_redis")
-            return True
-        except Exception as e:
-            self.logger.error(f"Erro ao salvar credenciais: {e}")
-            return False
+        # Salva credenciais do Redis no ConfigManager
+        credentials_data = {
+            'host': 'redis',
+            'port': 6379,
+            'password': self.redis_password,
+            'connection_string': f'redis://:{self.redis_password}@redis:6379',
+            'created_at': datetime.now().isoformat()
+        }
+        self.config.save_app_credentials('redis', credentials_data)
+        
+        self.logger.info("Credenciais do Redis salvas no ConfigManager")
+        return True
 
     def run(self):
         """Executa a instalação completa do Redis"""
@@ -241,6 +242,6 @@ Conexão interna: redis://:${self.redis_password}@redis:6379
         
         self.logger.info("Instalação do Redis concluída com sucesso")
         self.logger.info(f"Senha gerada: {self.redis_password}")
-        self.logger.info("Credenciais salvas em /root/dados_vps/dados_redis")
+        self.logger.info("Credenciais salvas no ConfigManager centralizado")
         
         return True

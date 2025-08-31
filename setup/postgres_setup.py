@@ -5,15 +5,18 @@ import logging
 import secrets
 import string
 import os
+from datetime import datetime
 from .base_setup import BaseSetup
 from utils.template_engine import TemplateEngine
 from utils.portainer_api import PortainerAPI
+from utils.config_manager import ConfigManager
 
 class PostgresSetup(BaseSetup):
-    def __init__(self, network_name: str = None):
+    def __init__(self, network_name: str = None, config_manager: ConfigManager = None):
         super().__init__("Instalação do PostgreSQL")
         self.postgres_password = None
         self.network_name = network_name
+        self.config = config_manager or ConfigManager()
 
     def validate_prerequisites(self) -> bool:
         """Valida pré-requisitos"""
@@ -185,29 +188,29 @@ class PostgresSetup(BaseSetup):
         """Salva as credenciais do PostgreSQL"""
         self.logger.info("Salvando credenciais do PostgreSQL")
         
-        credentials = f"""[ POSTGRESQL ]
-
-Host: postgres
-Port: 5432
-Database: postgres
-Usuario: postgres
-Senha: {self.postgres_password}
-
-String de conexão: postgresql://postgres:{self.postgres_password}@postgres:5432/postgres
-"""
+        # Salva configuração do PostgreSQL no ConfigManager
+        config_data = {
+            'host': 'postgres',
+            'port': 5432,
+            'database': 'postgres',
+            'configured_at': datetime.now().isoformat()
+        }
+        self.config.save_app_config('postgres', config_data)
         
-        try:
-            # Cria diretório se não existir
-            os.makedirs("/root/dados_vps", exist_ok=True)
-            
-            with open("/root/dados_vps/dados_postgres", 'w') as f:
-                f.write(credentials)
-            
-            self.logger.info("Credenciais salvas em /root/dados_vps/dados_postgres")
-            return True
-        except Exception as e:
-            self.logger.error(f"Erro ao salvar credenciais: {e}")
-            return False
+        # Salva credenciais do PostgreSQL no ConfigManager
+        credentials_data = {
+            'host': 'postgres',
+            'port': 5432,
+            'database': 'postgres',
+            'username': 'postgres',
+            'password': self.postgres_password,
+            'connection_string': f'postgresql://postgres:{self.postgres_password}@postgres:5432/postgres',
+            'created_at': datetime.now().isoformat()
+        }
+        self.config.save_app_credentials('postgres', credentials_data)
+        
+        self.logger.info("Credenciais do PostgreSQL salvas no ConfigManager")
+        return True
 
     def run(self):
         """Executa a instalação completa do PostgreSQL"""
@@ -245,6 +248,6 @@ String de conexão: postgresql://postgres:{self.postgres_password}@postgres:5432
         
         self.logger.info("Instalação do PostgreSQL concluída com sucesso")
         self.logger.info(f"Senha gerada: {self.postgres_password}")
-        self.logger.info("Credenciais salvas em /root/dados_vps/dados_postgres")
+        self.logger.info("Credenciais salvas no ConfigManager centralizado")
         
         return True

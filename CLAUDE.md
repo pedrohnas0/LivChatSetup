@@ -95,6 +95,44 @@ To add a new service stack, create these files:
 - Parametrize all credentials, domains, and configuration values
 - Follow naming convention: `<service>.yaml.j2`
 
+### Critical: Domain Suggestion Pattern
+**NEVER use hostname for domain suggestions** - this causes domains like `edt.dev.localhost` instead of `edt.dev.livchat.ai`.
+
+#### ✅ CORRECT Pattern
+Use ConfigManager's built-in method that uses Cloudflare zone_name:
+```python
+# In setup modules - PREFERRED METHOD
+suggested_domain = self.config.suggest_domain("app_name")  # Uses zone_name automatically
+```
+
+#### ✅ CORRECT Pattern (Manual)
+If implementing custom domain suggestion logic, use zone_name:
+```python
+def _get_domain_suggestion(self, domain_key: str, subdomain_prefix: str) -> str:
+    # Check existing config first
+    existing_config = self.config.get_app_config('app_name')
+    if existing_config and domain_key in existing_config:
+        return existing_config[domain_key]
+    
+    # Use Cloudflare zone_name (NOT hostname)
+    cloudflare_config = self.config.get_cloudflare_config()
+    zone_name = cloudflare_config.get('zone_name', '')
+    default_subdomain = self.config.get_default_subdomain() or 'dev'
+    
+    if zone_name:
+        return f"{subdomain_prefix}.{default_subdomain}.{zone_name}"  # ✅ CORRECT
+    else:
+        hostname = self.config.get_hostname() or 'localhost'
+        return f"{subdomain_prefix}.{default_subdomain}.{hostname}"  # Fallback only
+```
+
+#### ❌ WRONG Pattern
+```python
+# DON'T DO THIS - causes localhost domains
+hostname = self.config.get_hostname() or 'localhost'  # ❌ WRONG
+return f"{subdomain_prefix}.{default_subdomain}.{hostname}"
+```
+
 ### Deployment Flow
 1. Interactive menu with TUI selection (multiple apps can be selected)
 2. Basic setup execution (system update, timezone, email, hostname, DNS, network)
@@ -408,3 +446,297 @@ echo -e "${cinza}○ 4/15 - Instalando curl${reset}"
 - Test alignment with different terminal widths during development
 - Validate Unicode character rendering in various terminal environments
 - Follow the 101-character internal width standard for consistency
+
+# CHECKLIST DE REFATORAÇÃO: MIGRAÇÃO PARA ConfigManager
+
+## Status da Refatoração
+
+### ✅ Módulos Refatorados (Padrão Correto)
+- **[01] basic_setup.py** - Configuração básica (e-mail, hostname, DNS, rede, timezone)
+- **[02] smtp_setup.py** - Configuração SMTP para aplicações 
+- **[05] portainer_setup.py** - Gerenciador Docker Portainer
+- **[17] cleanup_setup.py** - Limpeza completa do ambiente
+
+### ❌ Módulos Pendentes de Refatoração (12 módulos)
+- **[06] redis_setup.py** - Cache/Session Store
+- **[07] postgres_setup.py** - Banco relacional
+- **[08] pgvector_setup.py** - Banco vetorial
+- **[09] minio_setup.py** - S3 Compatible Storage
+- **[10] chatwoot_setup.py** - Customer Support Platform
+- **[11] directus_setup.py** - Headless CMS
+- **[12] n8n_setup.py** - Workflow Automation
+- **[13] grafana_setup.py** - Stack de monitoramento
+- **[14] gowa_setup.py** - WhatsApp API Multi Device
+- **[15] livchatbridge_setup.py** - Webhook Connector
+- **[16] passbolt_setup.py** - Password Manager
+- **[18] evolution_setup.py** - WhatsApp API v2
+
+### ❌ Arquivos Utilitários (2 arquivos)
+- **utils/module_coordinator.py** - 3 referências `dados_vps`
+- **utils/cloudflare_api.py** - 2 referências `dados_vps`
+
+## Padrão de Refatoração ConfigManager
+
+### 1. Importação e Inicialização
+```python
+# Adicionar import no topo do arquivo
+from utils.config_manager import ConfigManager
+
+# No construtor __init__
+def __init__(self, config_manager: ConfigManager = None):
+    super().__init__()
+    self.config = config_manager or ConfigManager()
+```
+
+### 2. Métodos ConfigManager Utilizados
+
+#### Métodos de Configuração de Aplicação
+```python
+# Salvar configuração da aplicação
+self.config.save_app_config(app_name, config_data)
+
+# Salvar credenciais da aplicação  
+self.config.save_app_credentials(app_name, credentials)
+
+# Obter email do usuário
+user_email = self.config.get_user_email()
+
+# Obter configurações globais
+hostname = self.config.get_global_config().get('hostname')
+network_name = self.config.get_global_config().get('network_name')
+```
+
+#### Métodos de Dados Específicos
+```python
+# Obter configurações de uma aplicação
+app_config = self.config.get_app_config(app_name)
+app_creds = self.config.get_app_credentials(app_name)
+
+# Verificar se aplicação está configurada
+is_configured = self.config.is_app_configured(app_name)
+```
+
+### 3. Estrutura JSON no ConfigManager
+
+```json
+{
+  "global": {
+    "hostname": "server-name",
+    "user_email": "user@domain.com",
+    "default_subdomain": "dev", 
+    "network_name": "livchat_network"
+  },
+  "applications": {
+    "postgres": {
+      "domain": "db.domain.com",
+      "configured_at": "2025-08-31T10:30:00",
+      "version": "16"
+    }
+  },
+  "credentials": {
+    "postgres": {
+      "password": "senha_gerada",
+      "username": "postgres",
+      "database": "postgres",
+      "created_at": "2025-08-31T10:30:00"
+    }
+  }
+}
+```
+
+### 4. Sistema de Sugestões Inteligentes
+
+```python
+# Padrão para inputs com sugestões do ConfigManager
+def _get_domain_input(self, service_name: str) -> str:
+    """Solicita domínio com sugestão inteligente do ConfigManager"""
+    existing_config = self.config.get_app_config(service_name)
+    suggestion = existing_config.get('domain', f"{service_name}.dev.{self.config.get_global_config().get('hostname', 'localhost')}")
+    
+    domain = input(f"Domínio do {service_name.title()} (Enter para '{suggestion}' ou digite outro valor): ").strip()
+    return domain if domain else suggestion
+```
+
+## Pontos de Ajuste Específicos por Arquivo
+
+### 📦 redis_setup.py
+**Linhas para alterar:**
+- `L199`: `with open("/root/dados_vps/dados_redis", 'w') as f:` → `self.config.save_app_credentials('redis', credentials)`
+- `L202`: `self.logger.info("Credenciais salvas em /root/dados_vps/dados_redis")` → `self.logger.info("Credenciais salvas no ConfigManager")`
+- `L244`: Mesmo padrão da linha 202
+
+**Refatoração necessária:**
+1. Adicionar `ConfigManager` no construtor
+2. Substituir escrita manual de arquivo por `save_app_credentials()`
+3. Implementar sistema de sugestões para domínio Redis
+4. Migração automática de `/root/dados_vps/dados_redis` existente
+
+### 📦 postgres_setup.py  
+**Linhas para alterar:**
+- `L203-206`: Bloco de escrita para arquivo → `self.config.save_app_credentials('postgres', credentials)`
+- `L248`: Log de confirmação → Atualizar mensagem
+
+**Refatoração necessária:**
+1. Adicionar `ConfigManager` no construtor
+2. Substituir `open("/root/dados_vps/dados_postgres", 'w')` por métodos ConfigManager
+3. Implementar migração de dados antigos
+4. Sistema de sugestões para senha e configurações
+
+### 📦 pgvector_setup.py
+**Linhas para alterar:**
+- `L218-221`: Escrita de credenciais → `save_app_credentials('pgvector', credentials)`
+- `L263`: Log de confirmação → Atualizar mensagem
+
+**Refatoração necessária:**
+1. Mesmo padrão do postgres_setup.py
+2. Verificar dependência com PostgreSQL via ConfigManager
+
+### 📦 minio_setup.py
+**Linhas para alterar:**
+- `L260-263`: Bloco escrita arquivo → `save_app_credentials('minio', credentials)`
+- `L312`: Log de confirmação → Atualizar mensagem
+
+**Refatoração necessária:**
+1. Adicionar ConfigManager no construtor
+2. Sistema de sugestões para access_key e secret_key
+3. Migração de dados antigos
+
+### 📦 chatwoot_setup.py
+**Linhas para alterar:**
+- `L91`: `with open("/root/dados_vps/dados_pgvector", 'r') as f:` → `self.config.get_app_credentials('pgvector')`
+- `L177`: `self.config.save_app_config('chatwoot', config_data)` (já parcialmente implementado)
+- `L185`: `self.config.save_app_credentials('chatwoot', credentials)` (já parcialmente implementado)
+
+**Refatoração necessária:**
+1. Remover leitura manual de arquivo dados_pgvector
+2. Usar `get_app_credentials('pgvector')` para obter senha do banco
+3. Sistema de sugestões para domínio Chatwoot
+
+### 📦 directus_setup.py
+**Linhas para alterar:**
+- `L84`: `with open("/root/dados_vps/dados_pgvector", 'r') as f:` → `self.config.get_app_credentials('pgvector')`
+
+**Refatoração necessária:**
+1. Adicionar ConfigManager no construtor
+2. Substituir leitura manual por métodos ConfigManager
+3. Implementar salvamento de credenciais Directus
+4. Sistema de sugestões para configurações
+
+### 📦 n8n_setup.py
+**Linhas para alterar:**
+- `L258`: `with open('/root/dados_vps/dados_postgres', 'r') as f:` → `self.config.get_app_credentials('postgres')`
+- `L274`: `with open('/root/dados_vps/dados_redis', 'r') as f:` → `self.config.get_app_credentials('redis')`
+- `L463`: `with open("/root/dados_vps/dados_n8n", 'w', encoding='utf-8') as f:` → `self.config.save_app_credentials('n8n', credentials)`
+- `L465`: Atualizar log de confirmação
+
+**Refatoração necessária:**
+1. Adicionar ConfigManager no construtor (já parcialmente implementado)
+2. Substituir todas as leituras manuais de arquivos
+3. Sistema de sugestões para domínios N8N (editor e webhook)
+4. Migração de dados antigos
+
+### 📦 evolution_setup.py
+**Linhas para alterar:**
+- `L149`: `creds_path = "/root/dados_vps/dados_postgres"` → `self.config.get_app_credentials('postgres')`
+- `L169`: `creds_path = "/root/dados_vps/dados_redis"` → `self.config.get_app_credentials('redis')`
+
+**Refatoração necessária:**
+1. Adicionar ConfigManager no construtor
+2. Substituir leituras de arquivos por métodos ConfigManager
+3. Implementar salvamento de credenciais Evolution
+4. Sistema de sugestões para configurações
+
+### 📦 grafana_setup.py
+**Linhas para alterar:**
+- `L320-322`: Bloco escrita arquivo → `self.config.save_app_credentials('grafana', credentials)`
+
+**Refatoração necessária:**
+1. Adicionar ConfigManager no construtor
+2. Sistema de sugestões para credenciais admin
+3. Integração com bases de dados via ConfigManager
+
+### 📦 gowa_setup.py
+**Linhas para alterar:**
+- `L140`: Log de credenciais salvas → Atualizar mensagem
+- `L169`: `with open("/root/dados_vps/dados_gowa", 'w', encoding='utf-8') as f:` → `self.config.save_app_credentials('gowa', credentials)`
+
+**Refatoração necessária:**
+1. Adicionar ConfigManager no construtor
+2. Substituir escrita manual por métodos ConfigManager
+3. Sistema de sugestões para token WhatsApp
+
+### 📦 passbolt_setup.py
+**Linhas para alterar:**
+- `L8`: Comentário sobre salvamento → Atualizar para ConfigManager
+- `L29`: `self.credentials_path = "/root/dados_vps/dados_passbolt"` → Remover (usar ConfigManager)
+- `L170, L296, L459, L487`: Caminhos debug logs → Manter inalterado (logs de debug)
+- `L586`: Mensagem sobre logs debug → Manter inalterado
+
+**Refatoração necessária:**
+1. Adicionar ConfigManager no construtor
+2. Remover `credentials_path` e usar ConfigManager
+3. Implementar salvamento via `save_app_credentials()`
+4. Sistema de sugestões para configurações Passbolt
+
+### 📦 livchatbridge_setup.py
+**Refatoração necessária:**
+1. Verificar se existe referência a `dados_vps` (não encontrada na análise)
+2. Implementar ConfigManager se não existir
+3. Sistema de salvamento de credenciais
+
+### 🔧 utils/module_coordinator.py
+**Linhas para alterar:**
+- `L402`: `return "/root/dados_vps/dados_network"` → Usar ConfigManager para network
+- `L439`: `return "/root/dados_vps/dados_vps"` → Usar ConfigManager para dados VPS 
+- `L489`: `return "/root/dados_vps/dados_hostname"` → Usar ConfigManager para hostname
+
+**Refatoração necessária:**
+1. Integrar com ConfigManager para obter dados globais
+2. Substituir retornos de caminhos por métodos ConfigManager
+3. Manter compatibilidade com módulos ainda não refatorados
+
+### 🔧 utils/cloudflare_api.py
+**Linhas para alterar:**
+- `L78`: `old_file = "/root/dados_vps/dados_cloudflare"` → Migração via ConfigManager
+- `L389-391`: Obtenção do host Portainer → `self.config.get_app_config('portainer')`
+
+**Refatoração necessária:**
+1. Integrar com ConfigManager para configurações Cloudflare
+2. Substituir leitura de `dados_portainer` por ConfigManager
+3. Sistema de migração de configurações antigas
+
+## Comandos de Teste Pós-Refatoração
+
+### Verificação de Referências
+```bash
+# Verificar se ainda existem referências a dados_vps
+grep -r "dados_vps" setup/ utils/ --exclude="*.md"
+
+# Verificar importações ConfigManager
+grep -r "from utils.config_manager import ConfigManager" setup/
+
+# Verificar métodos ConfigManager utilizados  
+grep -r "\.save_app_" setup/
+grep -r "\.get_app_" setup/
+```
+
+### Teste de Migração
+```bash
+# Executar módulo refatorado para teste
+sudo python3 main.py --verbose
+
+# Verificar estrutura do livchat-config.json
+cat /root/livchat-config.json | jq '.'
+
+# Verificar se dados_vps ainda existe (deve estar vazio após migração)
+ls -la /root/dados_vps/
+```
+
+## Notas Importantes
+
+1. **Migração Automática**: Todos os módulos refatorados devem implementar migração automática dos arquivos `dados_vps` existentes
+2. **Compatibilidade**: Durante o período de transição, alguns módulos podem ainda depender de `dados_vps` 
+3. **Sistema de Sugestões**: Implementar sugestões inteligentes baseadas em configurações existentes
+4. **Timestamping**: Adicionar `created_at` e `configured_at` em todas as configurações salvas
+5. **Validação**: Verificar se ConfigManager está funcional antes de usar métodos
+6. **Backup**: Manter backup dos dados_vps durante migração para rollback se necessário

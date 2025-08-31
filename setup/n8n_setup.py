@@ -8,12 +8,14 @@ Inclui integração com Cloudflare para DNS automático
 import os
 import secrets
 import subprocess
+from datetime import datetime
 from setup.base_setup import BaseSetup
 from utils.portainer_api import PortainerAPI
 from utils.template_engine import TemplateEngine
 from utils.cloudflare_api import get_cloudflare_api
 from setup.postgres_setup import PostgresSetup
 from setup.redis_setup import RedisSetup
+from utils.config_manager import ConfigManager
 
 class N8NSetup(BaseSetup):
     """Setup do N8N com integração Cloudflare"""
@@ -27,18 +29,14 @@ class N8NSetup(BaseSetup):
     CINZA = "\033[90m"          # Gray - Para borders e inactive items
     RESET = "\033[0m"           # Reset - Always close color sequences
     
-    def __init__(self, network_name: str = None, config_manager = None):
+    def __init__(self, network_name: str = None, config_manager: ConfigManager = None):
         super().__init__("N8N (Workflow Automation)")
         self.service_name = "n8n"
         self.portainer_api = PortainerAPI()
         self.template_engine = TemplateEngine()
         self.network_name = network_name
-        self.config = config_manager or self._get_default_config_manager()
+        self.config = config_manager or ConfigManager()
         
-    def _get_default_config_manager(self):
-        """Carrega ConfigManager se não fornecido"""
-        from utils.config_manager import ConfigManager
-        return ConfigManager()
     
     def validate_prerequisites(self) -> bool:
         """Valida pré-requisitos para o N8N"""
@@ -132,7 +130,7 @@ class N8NSetup(BaseSetup):
         self._print_section_box("⚙️  CONFIGURAÇÃO N8N")
         
         # Domínio do N8N Editor com sugestão inteligente
-        n8n_suggested_domain = self.config.suggest_domain("n8n")
+        n8n_suggested_domain = self._get_domain_suggestion('n8n_domain', 'edt')
         while True:
             n8n_domain = self.get_user_input("Domínio do N8N Editor", suggestion=n8n_suggested_domain)
             if n8n_domain and '.' in n8n_domain:
@@ -140,7 +138,7 @@ class N8NSetup(BaseSetup):
             print(f"{self.VERMELHO}❌ Domínio é obrigatório e deve ser válido!{self.RESET}")
         
         # Domínio do Webhook com sugestão inteligente
-        webhook_suggested_domain = self.config.suggest_domain("whk")
+        webhook_suggested_domain = self._get_domain_suggestion('webhook_domain', 'whk')
         while True:
             webhook_domain = self.get_user_input("Domínio do Webhook do N8N", suggestion=webhook_suggested_domain)
             if webhook_domain and '.' in webhook_domain:
@@ -252,33 +250,54 @@ class N8NSetup(BaseSetup):
         domains = [n8n_domain, webhook_domain]
         return cf.setup_dns_for_service("N8N", domains)
     
-    def get_postgres_password(self):
-        """Obtém a senha do PostgreSQL (N8N usa PostgreSQL, não PgVector)"""
+    def _get_domain_suggestion(self, domain_key: str, subdomain_prefix: str) -> str:
+        """Gera sugestão de domínio inteligente baseada em configurações existentes"""
         try:
-            with open('/root/dados_vps/dados_postgres', 'r') as f:
-                for line in f:
-                    if line.startswith('Senha:'):
-                        return line.split(':', 1)[1].strip()
-            self.logger.error("Senha não encontrada no arquivo dados_postgres")
-            return None
-        except FileNotFoundError:
-            self.logger.error("Arquivo de credenciais do PostgreSQL não encontrado")
+            # Verifica se já existe configuração do N8N
+            existing_config = self.config.get_app_config('n8n')
+            if existing_config and domain_key in existing_config:
+                return existing_config[domain_key]
+            
+            # Fallback: constrói baseado nas configurações globais usando Cloudflare zone_name
+            cloudflare_config = self.config.get_cloudflare_config()
+            zone_name = cloudflare_config.get('zone_name', '')
+            default_subdomain = self.config.get_default_subdomain() or 'dev'
+            
+            if zone_name:
+                return f"{subdomain_prefix}.{default_subdomain}.{zone_name}"
+            else:
+                # Se não há Cloudflare configurado, usar hostname como fallback
+                hostname = self.config.get_hostname() or 'localhost'
+                return f"{subdomain_prefix}.{default_subdomain}.{hostname}"
+        except Exception as e:
+            self.logger.error(f"Erro ao gerar sugestão de domínio: {e}")
+            return f"{subdomain_prefix}.dev.localhost"
+    
+    def get_postgres_password(self):
+        """Obtém a senha do PostgreSQL via ConfigManager"""
+        try:
+            # Primeiro tenta do ConfigManager
+            postgres_creds = self.config.get_app_credentials('postgres')
+            if postgres_creds and 'password' in postgres_creds:
+                return postgres_creds['password']
+            
+            
+            self.logger.error("Credenciais do PostgreSQL não encontradas")
             return None
         except Exception as e:
             self.logger.error(f"Erro ao obter senha do PostgreSQL: {e}")
             return None
     
     def get_redis_password(self):
-        """Obtém a senha do Redis"""
+        """Obtém a senha do Redis via ConfigManager"""
         try:
-            with open('/root/dados_vps/dados_redis', 'r') as f:
-                for line in f:
-                    if line.startswith('Senha:'):
-                        return line.split(':', 1)[1].strip()
-            self.logger.error("Senha não encontrada no arquivo dados_redis")
-            return None
-        except FileNotFoundError:
-            self.logger.error("Arquivo de credenciais do Redis não encontrado")
+            # Primeiro tenta do ConfigManager
+            redis_creds = self.config.get_app_credentials('redis')
+            if redis_creds and 'password' in redis_creds:
+                return redis_creds['password']
+            
+            
+            self.logger.error("Credenciais do Redis não encontradas")
             return None
         except Exception as e:
             self.logger.error(f"Erro ao obter senha do Redis: {e}")
@@ -304,24 +323,43 @@ class N8NSetup(BaseSetup):
                 self.logger.error("Container do serviço PostgreSQL não encontrado")
                 return False
             
+            # Limpa possíveis tipos conflitantes da database postgres que podem ter sido deixados por instalações anteriores
+            clean_types_cmd = f"""docker exec {container_name} psql -U postgres -c "DROP TYPE IF EXISTS project CASCADE;" """
+            subprocess.run(clean_types_cmd, shell=True, capture_output=True, text=True, env={'PGPASSWORD': postgres_password})
+            
             # Verifica se banco de dados existe
             check_db_cmd = f"docker exec {container_name} psql -U postgres -t -c \"SELECT 1 FROM pg_database WHERE datname = '{database_name}';\""
             
             result = subprocess.run(check_db_cmd, shell=True, capture_output=True, text=True, env={'PGPASSWORD': postgres_password})
             
             if result.stdout.strip():
-                self.logger.info(f"✅ Banco de dados '{database_name}' já existe")
-                return True
+                self.logger.info(f"⚠️ Banco de dados '{database_name}' já existe, removendo para garantir instalação limpa")
+                
+                # Remove conexões ativas e dropa o banco
+                drop_connections_cmd = f"""docker exec {container_name} psql -U postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{database_name}' AND pid <> pg_backend_pid();" """
+                subprocess.run(drop_connections_cmd, shell=True, capture_output=True, text=True, env={'PGPASSWORD': postgres_password})
+                
+                # Aguarda um pouco para garantir que conexões foram fechadas
+                import time
+                time.sleep(2)
+                
+                drop_db_cmd = f"docker exec {container_name} psql -U postgres -c \"DROP DATABASE IF EXISTS {database_name};\""
+                result_drop = subprocess.run(drop_db_cmd, shell=True, capture_output=True, text=True, env={'PGPASSWORD': postgres_password})
+                
+                if result_drop.returncode == 0:
+                    self.logger.info(f"🧹 Banco de dados '{database_name}' removido com sucesso")
+                else:
+                    self.logger.warning(f"Aviso ao remover banco: {result_drop.stderr}")
             
             # Cria o banco se não existir
             create_db_cmd = f"docker exec {container_name} psql -U postgres -c \"CREATE DATABASE {database_name};\""
             
-            self.logger.info(f"🔧 Criando banco de dados '{database_name}'...")
+            self.logger.info(f"🔧 Criando banco de dados limpo '{database_name}'...")
             
             result = subprocess.run(create_db_cmd, shell=True, capture_output=True, text=True, env={'PGPASSWORD': postgres_password})
             
             if result.returncode == 0:
-                self.logger.info(f"✅ Banco de dados '{database_name}' criado/verificado")
+                self.logger.info(f"✅ Banco de dados '{database_name}' criado com sucesso")
                 return True
             else:
                 self.logger.error(f"Erro ao criar banco: {result.stderr}")
@@ -342,7 +380,7 @@ class N8NSetup(BaseSetup):
         )
         if check.returncode != 0 or "Running" not in check.stdout:
             self.logger.warning("PostgreSQL não encontrado/rodando. Iniciando instalação automática...")
-            pg = PostgresSetup(network_name=self.network_name)
+            pg = PostgresSetup(network_name=self.network_name, config_manager=self.config)
             if not pg.run():
                 self.logger.error("Falha ao instalar/configurar PostgreSQL")
                 return False
@@ -358,7 +396,7 @@ class N8NSetup(BaseSetup):
         )
         if check.returncode != 0 or "Running" not in check.stdout:
             self.logger.warning("Redis não encontrado/rodando. Iniciando instalação automática...")
-            rd = RedisSetup(network_name=self.network_name)
+            rd = RedisSetup(network_name=self.network_name, config_manager=self.config)
             if not rd.run():
                 self.logger.error("Falha ao instalar/configurar Redis")
                 return False
@@ -441,30 +479,31 @@ class N8NSetup(BaseSetup):
             )
             
             if success:
-                # Salva credenciais como string diretamente no arquivo
-                credentials_text = f"""N8N Instalado com Sucesso!
-
-Domínio N8N: https://{user_data['n8n_domain']}
-Domínio Webhook: https://{user_data['webhook_domain']}
-Chave de Criptografia: {encryption_key}
-Banco de Dados: {database_name}
-
-Configurações SMTP:
-- Email: {user_data['smtp_email']}
-- Host: {user_data['smtp_host']}
-- Porta: {user_data['smtp_port']}
-- SSL: {user_data['smtp_secure']}
-"""
+                # Salva configuração do N8N no ConfigManager
+                config_data = {
+                    'n8n_domain': user_data['n8n_domain'],
+                    'webhook_domain': user_data['webhook_domain'],
+                    'database_name': database_name,
+                    'configured_at': datetime.now().isoformat()
+                }
+                self.config.save_app_config('n8n', config_data)
                 
-                # Salva credenciais diretamente no arquivo
-                try:
-                    import os
-                    os.makedirs("/root/dados_vps", exist_ok=True)
-                    with open("/root/dados_vps/dados_n8n", 'w', encoding='utf-8') as f:
-                        f.write(credentials_text)
-                    self.logger.info("Credenciais salvas em /root/dados_vps/dados_n8n")
-                except Exception as e:
-                    self.logger.error(f"Erro ao salvar credenciais: {e}")
+                # Salva credenciais do N8N no ConfigManager
+                credentials = {
+                    'n8n_domain': user_data['n8n_domain'],
+                    'webhook_domain': user_data['webhook_domain'],
+                    'encryption_key': encryption_key,
+                    'database_name': database_name,
+                    'smtp_email': user_data['smtp_email'],
+                    'smtp_host': user_data['smtp_host'],
+                    'smtp_port': user_data['smtp_port'],
+                    'smtp_secure': user_data['smtp_secure'],
+                    'created_at': datetime.now().isoformat()
+                }
+                self.config.save_app_credentials('n8n', credentials)
+                
+                self.logger.info("Credenciais de n8n salvas no ConfigManager centralizado")
+                
                 
                 self.logger.info("Instalação do N8N concluída com sucesso")
                 self.logger.info(f"Acesse: https://{user_data['n8n_domain']}")

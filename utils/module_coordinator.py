@@ -574,14 +574,14 @@ class ModuleCoordinator:
                 if not self.ensure_network_name():
                     self.logger.warning("Nome da rede não definido. Pulando instalação do Redis.")
                     return True
-                redis_setup = RedisSetup(network_name=self.args.network_name)
+                redis_setup = RedisSetup(network_name=self.args.network_name, config_manager=self.config)
                 return redis_setup.run()
             
             elif module_name == 'postgres':
                 if not self.ensure_network_name():
                     self.logger.warning("Nome da rede não definido. Pulando instalação do PostgreSQL.")
                     return True
-                postgres_setup = PostgresSetup(network_name=self.args.network_name)
+                postgres_setup = PostgresSetup(network_name=self.args.network_name, config_manager=self.config)
                 return postgres_setup.run()
             
             elif module_name == 'pgvector':
@@ -1069,7 +1069,7 @@ class ModuleCoordinator:
         if not self.ensure_network_name():
             self.logger.warning("Nome da rede não definido. Pulando instalação do Redis.")
             return True
-        redis_setup = RedisSetup(network_name=self.args.network_name)
+        redis_setup = RedisSetup(network_name=self.args.network_name, config_manager=self.config)
         return redis_setup.run()
     
     def run_postgres_setup(self) -> bool:
@@ -1077,7 +1077,7 @@ class ModuleCoordinator:
         if not self.ensure_network_name():
             self.logger.warning("Nome da rede não definido. Pulando instalação do PostgreSQL.")
             return True
-        postgres_setup = PostgresSetup(network_name=self.args.network_name)
+        postgres_setup = PostgresSetup(network_name=self.args.network_name, config_manager=self.config)
         return postgres_setup.run()
     
     def run_pgvector_setup(self) -> bool:
