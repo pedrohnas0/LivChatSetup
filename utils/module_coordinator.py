@@ -124,6 +124,9 @@ class ModuleCoordinator:
         # Carrega configurações do JSON centralizado
         self._load_persisted_configs()
         
+        # Para controle de dependências automáticas
+        self.dependency_modules = set()
+        
         # Mapeamento de dependências
         self.dependencies = {
             'docker': ['basic'],
@@ -514,10 +517,15 @@ class ModuleCoordinator:
                 if not self.ensure_network_name():
                     self.logger.warning("Nome da rede não definido. Pulando instalação do Portainer.")
                     return True
+                
+                # Verifica se é dependência automática ou selecionado explicitamente
+                is_auto_mode = hasattr(self, 'dependency_modules') and module_name in self.dependency_modules
+                
                 portainer_setup = PortainerSetup(
                     kwargs.get('portainer_domain') or self.args.portainer_domain,
                     network_name=self.args.network_name,
-                    config_manager=self.config
+                    config_manager=self.config,
+                    auto_mode=is_auto_mode
                 )
                 return portainer_setup.run()
             
@@ -716,6 +724,9 @@ class ModuleCoordinator:
             if self.is_basic_config_complete():
                 required_modules.remove('basic')
                 self.logger.info("Removendo 'basic' das dependências - configurações já completas")
+        
+        # Armazena quais módulos são dependências automáticas para o contexto
+        self.dependency_modules = required_modules - set(explicitly_selected)
         
         # Ordena pelos módulos de infraestrutura primeiro
         ordered_modules = []

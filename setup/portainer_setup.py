@@ -24,11 +24,12 @@ class PortainerSetup(BaseSetup):
     CINZA = "\033[90m"          # Gray - Para borders e inactive items
     RESET = "\033[0m"           # Reset - Always close color sequences
     
-    def __init__(self, domain: str = None, network_name: str = None, config_manager: ConfigManager = None):
+    def __init__(self, domain: str = None, network_name: str = None, config_manager: ConfigManager = None, auto_mode: bool = False):
         super().__init__("Instalação do Portainer")
         self.domain = domain
         self.network_name = network_name
         self.config = config_manager or ConfigManager()
+        self.auto_mode = auto_mode  # Modo automático quando é dependência
         
     def validate_prerequisites(self) -> bool:
         """Valida pré-requisitos"""
@@ -372,26 +373,36 @@ class PortainerSetup(BaseSetup):
             self.logger.error("❌ Erro ao gerar credenciais sugeridas.")
             return False
         
-        # Sessão de destaque de sucesso com as credenciais sugeridas
-        self._show_success_summary_with_suggested_credentials(suggested_credentials)
-        
-        # Confirma se o usuário criou a conta com as credenciais sugeridas
-        if not self._confirm_account_creation_with_suggested_credentials(suggested_credentials):
-            self.logger.error("❌ Criação da conta não confirmada. Configure manualmente antes de continuar.")
-            return False
-        
-        # Coleta credenciais reais confirmadas pelo usuário
-        real_credentials = self._collect_real_credentials(suggested_credentials)
-        if real_credentials:
-            # Salva as credenciais reais
+        if self.auto_mode:
+            # Modo automático (dependência) - configuração silenciosa
+            self._show_auto_mode_summary(suggested_credentials)
+            # Salva as credenciais sugeridas automaticamente
             self.config.save_app_credentials("portainer", {
                 "url": f"https://{self.domain}",
-                "username": real_credentials['username'],
-                "password": real_credentials['password']
+                "username": suggested_credentials['username'],
+                "password": suggested_credentials['password']
             })
-        
-        # Pergunta sobre mais instalações
-        self._ask_for_more_installations()
+        else:
+            # Modo manual (selecionado pelo usuário) - configuração interativa
+            self._show_success_summary_with_suggested_credentials(suggested_credentials)
+            
+            # Confirma se o usuário criou a conta com as credenciais sugeridas
+            if not self._confirm_account_creation_with_suggested_credentials(suggested_credentials):
+                self.logger.error("❌ Criação da conta não confirmada. Configure manualmente antes de continuar.")
+                return False
+            
+            # Coleta credenciais reais confirmadas pelo usuário
+            real_credentials = self._collect_real_credentials(suggested_credentials)
+            if real_credentials:
+                # Salva as credenciais reais
+                self.config.save_app_credentials("portainer", {
+                    "url": f"https://{self.domain}",
+                    "username": real_credentials['username'],
+                    "password": real_credentials['password']
+                })
+            
+            # Pergunta sobre mais instalações
+            self._ask_for_more_installations()
         
         self.logger.info(f"✅ Acesso ao Portainer confirmado!")
         self.logger.info(f"Configuração salva no ConfigManager: {self.domain}")
@@ -451,6 +462,19 @@ class PortainerSetup(BaseSetup):
         print()
         
         input(f"{self.BEGE}Pressione {self.VERDE}Enter{self.RESET} {self.BEGE}para instalar mais aplicações ou {self.VERMELHO}Ctrl+C{self.RESET} {self.BEGE}para encerrar...{self.RESET}")
+    
+    def _show_auto_mode_summary(self, credentials: dict):
+        """Exibe resumo simplificado para modo automático (dependência)"""
+        self._print_section_box("✅ PORTAINER INSTALADO (DEPENDÊNCIA)")
+        
+        print(f"{self.VERDE}🌐 URL: {self.BRANCO}https://{self.domain}{self.RESET}")
+        print(f"{self.VERDE}🔧 Status: {self.BRANCO}Pronto para gerenciar containers{self.RESET}")
+        print()
+        print(f"{self.BEGE}📝 Credenciais salvas automaticamente para automação:{self.RESET}")
+        print(f"   {self.VERDE}•{self.RESET} Usuario: {credentials['username']}")
+        print(f"   {self.VERDE}•{self.RESET} Senha: [gerada automaticamente]")
+        print()
+        print(f"{self.LARANJA}ℹ️  Portainer configurado como dependência - prosseguindo com instalação...{self.RESET}")
     
     def _show_success_summary_with_suggested_credentials(self, credentials: dict):
         """Exibe sessão de sucesso com credenciais que o usuário DEVE usar seguindo padrão visual"""
