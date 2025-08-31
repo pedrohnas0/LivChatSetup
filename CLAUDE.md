@@ -246,7 +246,38 @@ box_bottom() {
 }
 ```
 
-#### Content Functions
+#### Python Box Functions
+
+All box drawing in Python modules follows a standardized pattern using Python's native `.center()` method:
+
+```python
+def _print_section_box(self, title: str, width: int = None):
+    """Standard box printing method - use this pattern in all modules"""
+    if width is None:
+        terminal_width = self._get_terminal_width()
+        width = min(60, terminal_width - 10)  # Small boxes: 60 max width
+        # For large boxes (ModuleCoordinator): min(80, terminal_width - 4)
+    
+    # Remove color codes for accurate centering
+    import re
+    clean_title = re.sub(r'\033\[[0-9;]*m', '', title)
+    
+    # Create border
+    line = "─" * (width - 1)
+    print(f"\n{self.CINZA}╭{line}╮{self.RESET}")
+    
+    # ALWAYS use native .center() and width - 2
+    content_width = width - 2  # Subtract border characters
+    centered_clean = clean_title.center(content_width)  # Python native method
+    
+    # Apply color to title
+    colored_line = centered_clean.replace(clean_title, f"{self.BEGE}{clean_title}{self.RESET}")
+    
+    print(f"{self.CINZA}│{colored_line}{self.CINZA}│{self.RESET}")
+    print(f"{self.CINZA}╰{line}╯{self.RESET}")
+```
+
+#### Bash Content Functions
 ```bash
 # For centered content (ASCII art, titles, success messages)
 box_line_centered() {
@@ -285,7 +316,14 @@ box_line() {
 
 ### Design Principles
 
-#### 1. ASCII Art Standards
+#### 1. Box Consistency Standards
+- **ALWAYS use Python's native `.center()` method** for all Python box centering
+- **ALWAYS use `content_width = width - 2`** to account for border characters `│ │`
+- **Small boxes**: max width 60 (setup modules)
+- **Large boxes**: max width 80 (ModuleCoordinator execution messages)  
+- **Colors**: `{self.BEGE}` for small box titles, `{self.LARANJA}` for large box titles
+
+#### 2. ASCII Art Standards
 - Always use the **orange color** (`${laranja}`) for ASCII art elements
 - Center ASCII art using `box_line_centered()` function
 - Surround with empty lines for visual breathing room
