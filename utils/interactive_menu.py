@@ -467,7 +467,7 @@ class InteractiveMenu:
         
         # CPU - 8 chars de largura
         if service_status['cpu'] is not None:
-            cpu_str = f"{metric_color}{service_status['cpu']:>5.1f}%{self.RESET}  "
+            cpu_str = f"{metric_color}{service_status['cpu']:>5.1f}%{self.RESET} "
         else:
             cpu_str = f"{metric_color}        {self.RESET}"
         
