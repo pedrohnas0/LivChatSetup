@@ -8,6 +8,7 @@ import sys
 import os
 import termios
 import tty
+import subprocess
 from datetime import datetime
 from typing import List, Dict, Optional
 
@@ -754,12 +755,17 @@ class ModuleCoordinator:
         for module in selected_modules:
             add_dependencies_recursive(module)
         
-        # Se 'basic' está nas dependências mas não foi explicitamente selecionado
-        # e as configurações básicas já estão completas, remove da lista
-        if 'basic' in required_modules and 'basic' not in explicitly_selected:
-            if self.is_basic_config_complete():
-                required_modules.remove('basic')
-                self.logger.info("Removendo 'basic' das dependências - configurações já completas")
+        # Remove módulos já instalados das dependências (exceto os explicitamente selecionados)
+        modules_to_remove = []
+        for module in required_modules:
+            # Se o módulo não foi explicitamente selecionado e já está instalado
+            if module not in explicitly_selected and self.is_module_installed(module):
+                modules_to_remove.append(module)
+                self.logger.info(f"Removendo '{module}' das dependências - já instalado/configurado")
+        
+        # Remove os módulos já instalados
+        for module in modules_to_remove:
+            required_modules.remove(module)
         
         # Armazena quais módulos são dependências automáticas para o contexto
         self.dependency_modules = required_modules - set(explicitly_selected)
@@ -793,6 +799,69 @@ class ModuleCoordinator:
             return False
         except Exception as e:
             self.logger.debug(f"Erro ao verificar configuração básica: {e}")
+            return False
+    
+    def is_module_installed(self, module: str) -> bool:
+        """Verifica se um módulo já está instalado/configurado"""
+        try:
+            # Casos especiais primeiro
+            if module == 'basic':
+                return self.is_basic_config_complete()
+            
+            # Verifica no ConfigManager se o módulo está configurado
+            if module == 'smtp':
+                smtp_config = self.config.get_app_config('smtp')
+                return smtp_config and smtp_config.get('configured', False)
+            
+            if module == 'docker':
+                # Verifica se Docker está rodando
+                result = subprocess.run("docker info", shell=True, capture_output=True, timeout=5)
+                return result.returncode == 0
+            
+            if module == 'traefik':
+                # Verifica se Traefik está rodando como stack
+                result = subprocess.run("docker stack ls --format '{{.Name}}'", shell=True, capture_output=True, text=True, timeout=5)
+                return result.returncode == 0 and 'traefik' in result.stdout
+            
+            if module == 'portainer':
+                # Verifica no ConfigManager
+                portainer_config = self.config.get_app_config('portainer')
+                if portainer_config and portainer_config.get('installed'):
+                    # Dupla verificação: stack rodando
+                    result = subprocess.run("docker stack ls --format '{{.Name}}'", shell=True, capture_output=True, text=True, timeout=5)
+                    return result.returncode == 0 and 'portainer' in result.stdout
+                return False
+            
+            if module == 'redis':
+                # Verifica credenciais e stack
+                redis_creds = self.config.get_app_credentials('redis')
+                if redis_creds:
+                    result = subprocess.run("docker stack ls --format '{{.Name}}'", shell=True, capture_output=True, text=True, timeout=5)
+                    return result.returncode == 0 and 'redis' in result.stdout
+                return False
+            
+            if module == 'postgres':
+                # Verifica credenciais e stack
+                postgres_creds = self.config.get_app_credentials('postgres')
+                if postgres_creds:
+                    result = subprocess.run("docker stack ls --format '{{.Name}}'", shell=True, capture_output=True, text=True, timeout=5)
+                    return result.returncode == 0 and 'postgres' in result.stdout
+                return False
+            
+            if module == 'pgvector':
+                # Verifica credenciais e stack
+                pgvector_creds = self.config.get_app_credentials('pgvector')
+                if pgvector_creds:
+                    result = subprocess.run("docker stack ls --format '{{.Name}}'", shell=True, capture_output=True, text=True, timeout=5)
+                    return result.returncode == 0 and 'pgvector' in result.stdout
+                return False
+            
+            # Para outros módulos, verifica se existe configuração
+            app_config = self.config.get_app_config(module)
+            return app_config and app_config.get('configured_at') is not None
+            
+        except Exception as e:
+            self.logger.debug(f"Erro ao verificar status do módulo {module}: {e}")
             return False
     
     def collect_global_config(self):
