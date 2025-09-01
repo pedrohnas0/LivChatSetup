@@ -338,8 +338,13 @@ class InteractiveMenuDemo:
                 
                 # Montar linha completa
                 if is_current:
-                    # Item com cursor - nome em branco
-                    line_content = f"{self.BRANCO}{cursor}{symbol_color}{symbol}{self.BRANCO} {item_number} {name}{status_icon}{' ' * padding_to_status}{self.RESET}{status_str}{cpu_str}{mem_str}"
+                    # Item com cursor
+                    if is_selected:
+                        # Cursor E selecionado - TUDO VERDE
+                        line_content = f"{self.VERDE}{cursor}{symbol} {item_number} {name}{status_icon}{' ' * padding_to_status}{self.RESET}{status_str}{cpu_str}{mem_str}"
+                    else:
+                        # Cursor mas não selecionado - branco
+                        line_content = f"{self.BRANCO}{cursor}{symbol_color}{symbol}{self.BRANCO} {item_number} {name}{status_icon}{' ' * padding_to_status}{self.RESET}{status_str}{cpu_str}{mem_str}"
                 else:
                     # Item normal
                     if is_selected:
@@ -375,14 +380,13 @@ class InteractiveMenuDemo:
     def _format_metrics(self, app, is_current):
         """Formata as métricas com cores apropriadas e alinhamento correto"""
         # Cor base para métricas
-        if is_current:
+        # Se o item está selecionado, métricas ficam verdes (mesmo com cursor)
+        if app["id"] in self.selected_items:
+            metric_color = self.VERDE
+        elif is_current:
             metric_color = self.BRANCO
         else:
-            # Se o item está selecionado, métricas também ficam verdes
-            if app["id"] in self.selected_items:
-                metric_color = self.VERDE
-            else:
-                metric_color = self.CINZA
+            metric_color = self.CINZA
         
         # STATUS (réplicas) - ajustado para alinhar 2 espaços à esquerda
         if app["replicas"]:
