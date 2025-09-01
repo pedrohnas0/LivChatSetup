@@ -386,8 +386,20 @@ class CloudflareAPI:
             return self.create_cname_record(name, target)
     
     def _get_portainer_cname_target(self):
-        """Obtém o host do Portainer salvo em /root/dados_vps/dados_portainer para usar como alvo CNAME."""
+        """Obtém o host do Portainer do ConfigManager para usar como alvo CNAME."""
         try:
+            # Primeiro tenta obter do ConfigManager
+            if self.config_manager:
+                portainer_config = self.config_manager.get_app_config("portainer")
+                if portainer_config and portainer_config.get("domain"):
+                    domain = portainer_config["domain"]
+                    # Remove esquema e path, mantendo apenas o host
+                    domain = domain.replace('https://', '').replace('http://', '')
+                    if '/' in domain:
+                        domain = domain.split('/', 1)[0]
+                    return domain
+            
+            # Fallback para arquivo legado se ConfigManager não tiver a informação
             creds_path = "/root/dados_vps/dados_portainer"
             if not os.path.exists(creds_path):
                 return None

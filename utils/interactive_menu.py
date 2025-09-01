@@ -158,10 +158,49 @@ class InteractiveMenu:
     
     def _get_service_status(self, app_id: str) -> dict:
         """Obtém status de um serviço específico"""
+        # Cleanup é uma ação, não uma configuração persistente
+        if app_id == 'cleanup':
+            return {'status': None, 'replicas': None, 'cpu': None, 'mem': None}
+        
         # Para aplicações de infraestrutura que não são serviços Docker
-        if app_id in ['basic', 'smtp', 'docker', 'cleanup']:
-            # Verificar se foi configurado (poderia ler de ConfigManager)
-            return {'status': 'configured', 'replicas': None, 'cpu': None, 'mem': None}
+        if app_id in ['basic', 'smtp', 'docker']:
+            # Verificar se realmente foi configurado usando ConfigManager
+            try:
+                from utils.config_manager import ConfigManager
+                config = ConfigManager()
+                
+                if app_id == 'basic':
+                    # Basic setup é considerado configurado se tem email e cloudflare
+                    global_config = config.get_global_config()
+                    if global_config.get('user_email') and global_config.get('cloudflare_configured'):
+                        return {'status': 'configured', 'replicas': None, 'cpu': None, 'mem': None}
+                
+                elif app_id == 'smtp':
+                    # SMTP é considerado configurado se tem as configurações
+                    smtp_config = config.get_app_config('smtp')
+                    if smtp_config and smtp_config.get('configured'):
+                        return {'status': 'configured', 'replicas': None, 'cpu': None, 'mem': None}
+                
+                elif app_id == 'docker':
+                    # Docker é considerado configurado se o swarm está ativo
+                    import subprocess
+                    try:
+                        result = subprocess.run(
+                            "docker info --format '{{.Swarm.LocalNodeState}}'",
+                            shell=True,
+                            capture_output=True,
+                            text=True,
+                            timeout=5
+                        )
+                        if result.returncode == 0 and result.stdout.strip() == "active":
+                            return {'status': 'configured', 'replicas': None, 'cpu': None, 'mem': None}
+                    except:
+                        pass
+            except:
+                pass
+            
+            # Se não conseguiu verificar ou não está configurado
+            return {'status': None, 'replicas': None, 'cpu': None, 'mem': None}
         
         # Primeiro tentar obter do cache atualizado
         if self.monitor_enabled and self.services_status:
