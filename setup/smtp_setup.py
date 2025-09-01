@@ -53,24 +53,17 @@ class SMTPSetup(BaseSetup):
         import re
         clean_title = re.sub(r'\033\[[0-9;]*m', '', title)
         
-        # Calcula largura visual considerando que emojis ocupam 2 espaços visuais
-        emoji_count = len([c for c in clean_title if ord(c) > 127])
-        visual_length = len(clean_title) + emoji_count
-        
         line = "─" * (width - 1)
         print(f"\n{self.CINZA}╭{line}╮{self.RESET}")
         
-        # Centralização corrigida para emojis
+        # Centralização perfeita usando Python nativo
         content_width = width - 2
-        text_padding = (content_width - visual_length) // 2 + 2  # Ajuste +2 para direita
-        right_padding = content_width - visual_length - text_padding
+        centered_clean = clean_title.center(content_width)
         
         # Aplicar cor bege ao título centralizado
-        colored_title = f"{self.BEGE}{clean_title}{self.RESET}"
-        padding_left = " " * text_padding
-        padding_right = " " * right_padding
-        
-        print(f"{self.CINZA}│{padding_left}{colored_title}{padding_right}{self.CINZA}│{self.RESET}")
+        colored_line = centered_clean.replace(clean_title, f"{self.BEGE}{clean_title}{self.RESET}")
+            
+        print(f"{self.CINZA}│{colored_line}{self.CINZA}│{self.RESET}")
         print(f"{self.CINZA}╰{line}╯{self.RESET}")
     
     def get_user_input(self, prompt: str, required: bool = False, suggestion: str = None) -> str:
