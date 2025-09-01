@@ -9,10 +9,8 @@ import termios
 import tty
 import time
 import logging
-import threading
 from typing import List, Dict
 from utils.module_coordinator import ModuleCoordinator
-from utils.docker_monitor import DockerMonitor
 
 class InteractiveMenu:
     """Menu TUI com seleção múltipla e rolagem"""
@@ -25,7 +23,6 @@ class InteractiveMenu:
     VERMELHO = "\033[91m"       # Red - Para errors e warnings
     CINZA = "\033[90m"          # Gray - Para borders e inactive items
     AZUL = "\033[34m"           # Blue - Para compatibility (legacy)
-    AMARELO = "\033[93m"        # Yellow - Para warning/updating states
     RESET = "\033[0m"           # Reset - Always close color sequences
     
     def __init__(self, args):
@@ -37,17 +34,6 @@ class InteractiveMenu:
         self.selected_index = 0
         self.selected_items = set()
         self.search_term = ""  # Para funcionalidade de pesquisa
-        
-        # Monitor Docker para status real
-        self.docker_monitor = None
-        self.monitor_enabled = False
-        self.services_status = {}  # Cache de status dos serviços
-        
-        # Spinner animation
-        self.spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-        self.spinner_index = 0
-        self.animation_thread = None
-        self.animation_running = False
         
         # Lista de aplicações disponíveis (34 itens)
         self.apps = [
@@ -95,85 +81,7 @@ class InteractiveMenu:
         # self.double_click_threshold = 0.5  # 500ms
         
         # Para controle de linhas do menu anterior (evita sobreposição)
-        self.last_drawn_lines = 20  # Valor inicial aumentado para novo layout
-        
-        # Largura do menu ajustada
-        self.menu_width = 92
-        
-        # Inicializar monitor Docker se disponível
-        self._init_docker_monitor()
-    
-    def _init_docker_monitor(self):
-        """Inicializa o monitor Docker se disponível"""
-        try:
-            self.docker_monitor = DockerMonitor(update_interval=2.0)
-            if self.docker_monitor.is_docker_available():
-                self.docker_monitor.start_monitoring()
-                self.monitor_enabled = True
-                self.logger.debug("Monitor Docker iniciado com sucesso")
-                # Aguardar coleta inicial
-                time.sleep(2)
-                # Obter dados iniciais
-                self.services_status = self.docker_monitor.get_all_services()
-            else:
-                self.logger.debug("Docker não disponível, monitoramento desabilitado")
-        except Exception as e:
-            self.logger.error(f"Erro ao inicializar monitor Docker: {e}")
-            self.monitor_enabled = False
-    
-    def _start_animation(self):
-        """Inicia thread de animação do spinner"""
-        if not self.animation_running:
-            self.animation_running = True
-            self.animation_thread = threading.Thread(target=self._animate_spinner, daemon=True)
-            self.animation_thread.start()
-    
-    def _stop_animation(self):
-        """Para thread de animação"""
-        self.animation_running = False
-        if self.animation_thread:
-            self.animation_thread.join(timeout=0.5)
-    
-    def _animate_spinner(self):
-        """Thread para animar os spinners"""
-        while self.animation_running:
-            time.sleep(0.1)  # Atualiza a cada 100ms
-            self.spinner_index = (self.spinner_index + 1) % len(self.spinner_chars)
-            
-            # Atualizar status dos serviços (menos frequente)
-            if self.spinner_index % 20 == 0:  # A cada 2 segundos
-                if self.monitor_enabled and self.docker_monitor:
-                    self.services_status = self.docker_monitor.get_all_services()
-            
-            # Forçar redesenho do menu para animar spinners
-            self._redraw_menu()
-    
-    def _redraw_menu(self):
-        """Redesenha o menu sem limpar input"""
-        # Limpar linhas anteriores
-        for _ in range(self.last_drawn_lines):
-            print(f"\033[1A\033[2K", end="")
-        # Desenhar novo menu
-        self.draw_menu()
-    
-    def _get_service_status(self, app_id: str) -> dict:
-        """Obtém status de um serviço específico"""
-        # Para aplicações de infraestrutura que não são serviços Docker
-        if app_id in ['basic', 'smtp', 'docker', 'cleanup']:
-            # Verificar se foi configurado (poderia ler de ConfigManager)
-            return {'status': 'configured', 'replicas': None, 'cpu': None, 'mem': None}
-        
-        # Primeiro tentar obter do cache atualizado
-        if self.monitor_enabled and self.services_status:
-            if app_id in self.services_status:
-                return self.services_status[app_id]
-        
-        # Se não está no cache mas o monitor está habilitado, tentar obter diretamente
-        if self.monitor_enabled and self.docker_monitor:
-            return self.docker_monitor.get_service_status(app_id)
-        
-        # Serviço não instalado
-        return {'status': None, 'replicas': None, 'cpu': None, 'mem': None}
+        self.last_drawn_lines = 15  # Valor inicial
     
     def get_filtered_apps(self):
         """Retorna lista filtrada de apps baseada no termo de pesquisa (incluindo números)"""
@@ -261,7 +169,7 @@ class InteractiveMenu:
         return key
     
     def draw_menu(self, first_draw=False):
-        """Desenha o menu TUI com status dos serviços"""
+        """Desenha o menu TUI com bordas arredondadas"""
         lines = []
         
         if first_draw:
@@ -272,23 +180,16 @@ class InteractiveMenu:
         total_count = len(self.apps)
         counter_text = f"Selecionados: {selected_count}/{total_count}"
         
-        # Título e contador alinhados
-        title_padding = self.menu_width - len("─ SETUP LIVCHAT ") - len(counter_text) - 5
+        # Título e contador alinhados (largura 101 caracteres internos)
+        title_padding = 79 - len("─ SETUP LIVCHAT ") - len(counter_text) - 3
         header_line = f"╭─ SETUP LIVCHAT {'─' * title_padding} {counter_text} ─╮"
         
         lines.append(f"{self.CINZA}{header_line}{self.RESET}")
-        
-        # Linha de instruções
+        # Linha de instruções com padding dinâmico
         instrucoes = " ↑/↓ navegar · → marcar (●/○) · Enter executar · Digite para pesquisar"
-        instrucoes_padding = self.menu_width - len(instrucoes) - 2
+        instrucoes_padding = 79 - len(instrucoes)  # Texto já inclui espaço inicial
         lines.append(f"{self.CINZA}│{self.BEGE}{instrucoes}{' ' * instrucoes_padding}{self.CINZA}│{self.RESET}")
-        lines.append(f"{self.CINZA}│{' ' * (self.menu_width - 2)}│{self.RESET}")
-        
-        # Cabeçalho da tabela
-        header_text = " APLICAÇÃO" + " " * 50 + "STATUS    CPU     MEM"
-        header_padding = self.menu_width - len(header_text) - 2
-        lines.append(f"{self.CINZA}│{self.BRANCO}{header_text}{' ' * header_padding}{self.CINZA}│{self.RESET}")
-        lines.append(f"{self.CINZA}│{' ' * (self.menu_width - 2)}│{self.RESET}")
+        lines.append(f"{self.CINZA}│                                                                               │{self.RESET}")
         
         # Filtrar apps baseado na pesquisa
         if self.search_term:
@@ -307,15 +208,15 @@ class InteractiveMenu:
             # Calcular padding considerando que emoji ocupa 2 caracteres visuais mas conta como 1 no len()
             # O emoji 🔍 conta como 1 no len() mas ocupa 2 espaços visuais
             visual_length = len(search_text) + 1  # +1 pelo emoji extra visual
-            search_padding = self.menu_width - visual_length - 3  # -3 para alinhar corretamente
+            search_padding = 79 - visual_length - 1  # -1 pelo espaço inicial
             lines.append(f"{self.CINZA}│ {self.BRANCO}{search_text}{' ' * search_padding}{self.CINZA}│{self.RESET}")
-            lines.append(f"{self.CINZA}│{' ' * (self.menu_width - 2)}│{self.RESET}")
+            lines.append(f"{self.CINZA}│                                                                               │{self.RESET}")
         else:
             current_apps = self.apps
         
-        # Mostrar até 11 itens (ajustado para novo layout)
-        visible_items = min(11, len(current_apps))
-        center_position = min(5, visible_items // 2)
+        # Mostrar até 9 itens filtrados (para dar espaço à caixa de pesquisa)
+        visible_items = min(9, len(current_apps))
+        center_position = min(4, visible_items // 2)
         
         # Calcular índices dos itens visíveis
         if len(current_apps) <= visible_items:
@@ -346,101 +247,57 @@ class InteractiveMenu:
             
             if app is None:
                 # Linha vazia
-                lines.append(f"{self.CINZA}│{' ' * (self.menu_width - 2)}│{self.RESET}")
+                lines.append(f"{self.CINZA}│                                                                              │{self.RESET}")
             else:
-                # Obter status real do serviço
-                service_status = self._get_service_status(app["id"])
-                
-                # É o item com cursor?
-                is_current = display_index == self.selected_index
-                
                 # Símbolo de seleção
-                is_selected = app["id"] in self.selected_items
+                symbol = "●" if app["id"] in self.selected_items else "○"
+                
+                # Número do item (baseado no índice + 1)
+                item_number = f"[{actual_index + 1:2d}]"
                 
                 # Desabilita seleção para "Em breve"
                 is_disabled = app["category"] == "future"
                 if is_disabled:
-                    is_selected = False
+                    symbol = "○"  # Sempre não selecionado
                 
-                # Formatação do item
-                cursor = "> " if is_current else "  "
-                symbol = "●" if is_selected else "○"
-                
-                # Cor do símbolo
-                if is_selected:
-                    symbol_color = self.VERDE
-                else:
-                    symbol_color = self.BRANCO if (is_current and not is_disabled) else self.CINZA
-                
-                # Número do item
-                item_number = f"[{actual_index + 1:2d}]"
-                
-                # Nome com status inline
-                name = app["name"]
-                if len(name) > 40:
-                    name = name[:37] + "..."
-                
-                # Status icon inline com o nome
-                if service_status['status'] == 'configured':
-                    status_icon = f" {self.VERDE}✓{self.RESET}"
-                elif service_status['status'] == 'running':
-                    spinner = self.spinner_chars[self.spinner_index]
-                    status_icon = f" {self.VERDE}{spinner}{self.RESET}"
-                elif service_status['status'] == 'stopped':
-                    status_icon = f" {self.VERMELHO}✗{self.RESET}"
-                elif service_status['status'] == 'updating':
-                    spinner = self.spinner_chars[(self.spinner_index * 2) % len(self.spinner_chars)]
-                    status_icon = f" {self.AMARELO}{spinner}{self.RESET}"
-                else:
-                    status_icon = ""
-                
-                # Calcular padding para alinhar com as colunas
-                import re
-                clean_name = re.sub(r'\033\[[0-9;]*m', '', name)
-                if status_icon:
-                    clean_name += " ✓"  # Adiciona 2 chars para o ícone
-                
-                # Total de espaço para aplicação: 60 chars
-                app_section_length = len(f"{cursor}{symbol} {item_number} {clean_name}")
-                padding_to_status = 60 - app_section_length
-                
-                # Formatação das métricas
-                status_str, cpu_str, mem_str = self._format_metrics(service_status, is_current, is_selected)
-                
-                # Montar linha completa
-                if is_current:
-                    # Item com cursor
-                    if is_selected:
-                        # Cursor E selecionado - TUDO VERDE
-                        line_content = f"{self.VERDE}{cursor}{symbol} {item_number} {name}{status_icon}{' ' * padding_to_status}{self.RESET}{status_str}{cpu_str}{mem_str}"
+                if display_index == self.selected_index:
+                    # Item atual com seta elegante (estilo original)
+                    if app["id"] in self.selected_items and not is_disabled:
+                        # Selecionado + atual - seta branca + verde
+                        text_content = f"→ {symbol} {item_number} {app['name']}"
+                        padding = 78 - len(text_content)
+                        lines.append(f"{self.CINZA}│ {self.BRANCO}→ {self.VERDE}{symbol} {item_number} {app['name']}{' ' * padding}{self.CINZA}│{self.RESET}")
                     else:
-                        # Cursor mas não selecionado - branco
-                        line_content = f"{self.BRANCO}{cursor}{symbol_color}{symbol}{self.BRANCO} {item_number} {name}{status_icon}{' ' * padding_to_status}{self.RESET}{status_str}{cpu_str}{mem_str}"
+                        # Só atual - seta branca (ou cinza se desabilitado)
+                        text_content = f"→ {symbol} {item_number} {app['name']}"
+                        padding = 78 - len(text_content)
+                        if is_disabled:
+                            lines.append(f"{self.CINZA}│ → {symbol} {item_number} {app['name']}{' ' * padding}│{self.RESET}")
+                        else:
+                            lines.append(f"{self.CINZA}│ {self.BRANCO}→ {symbol} {item_number} {app['name']}{' ' * padding}{self.CINZA}│{self.RESET}")
                 else:
-                    # Item normal
-                    if is_selected:
-                        # TODA LINHA VERDE quando selecionada
-                        line_content = f"{self.VERDE}{cursor}{symbol} {item_number} {name}{status_icon}{' ' * padding_to_status}{self.RESET}{status_str}{cpu_str}{mem_str}"
+                    # Item normal - sem seta (2 espaços para alinhar com "→ ")
+                    if app["id"] in self.selected_items and not is_disabled:
+                        # Selecionado mas sem foco - verde simples
+                        text_content = f"  {symbol} {item_number} {app['name']}"
+                        padding = 78 - len(text_content)
+                        lines.append(f"{self.CINZA}│ {self.VERDE}  {symbol} {item_number} {app['name']}{' ' * padding}{self.CINZA}│{self.RESET}")
                     else:
-                        # Tudo cinza
-                        line_content = f"{self.CINZA}{cursor}{symbol} {item_number} {name}{status_icon}{' ' * padding_to_status}{self.RESET}{status_str}{cpu_str}{mem_str}"
-                
-                # Calcular padding final
-                clean_line = re.sub(r'\033\[[0-9;]*m', '', line_content)
-                final_padding = self.menu_width - len(clean_line) - 2
-                
-                lines.append(f"{self.CINZA}│{self.RESET}{line_content}{' ' * final_padding}{self.CINZA}│{self.RESET}")
+                        # Normal - cinza para texto
+                        text_content = f"  {symbol} {item_number} {app['name']}"
+                        padding = 78 - len(text_content)
+                        lines.append(f"{self.CINZA}│   {symbol} {item_number} {app['name']}{' ' * padding}│{self.RESET}")
         
-        # Legenda simplificada
+        # Footer com legenda (só quando não há busca)
         if not self.search_term:
-            legenda = "○/● = não selecionado/selecionado"
-            legenda_padding = self.menu_width - len(legenda) - 3
+            # Mostrar legenda quando não há pesquisa
+            legenda = "Legenda: ○ = não selecionado · ● = selecionado"
+            legenda_padding = 78 - len(legenda)
             lines.append(f"{self.CINZA}│ {self.BEGE}{legenda}{' ' * legenda_padding}{self.CINZA}│{self.RESET}")
         
-        # Footer
-        lines.append(f"{self.CINZA}│{' ' * (self.menu_width - 2)}│{self.RESET}")
-        footer_line = "─" * (self.menu_width - 2)
-        lines.append(f"{self.CINZA}╰{footer_line}╯{self.RESET}")
+        # Footer com bordas arredondadas
+        lines.append(f"{self.CINZA}│                                                                               │{self.RESET}")
+        lines.append(f"{self.CINZA}╰───────────────────────────────────────────────────────────────────────────────╯{self.RESET}")
         
         # Imprimir tudo de uma vez
         for line in lines:
@@ -448,36 +305,6 @@ class InteractiveMenu:
             
         # Atualiza contador de linhas desenhadas para próxima limpeza
         self.last_drawn_lines = len(lines)
-    
-    def _format_metrics(self, service_status: dict, is_current: bool, is_selected: bool):
-        """Formata as métricas com cores apropriadas"""
-        # Cor base para métricas
-        if is_selected:
-            metric_color = self.VERDE
-        elif is_current:
-            metric_color = self.BRANCO
-        else:
-            metric_color = self.CINZA
-        
-        # STATUS (réplicas) - ajustado para alinhar
-        if service_status['replicas']:
-            status_str = f"{metric_color}{service_status['replicas']:>5}{self.RESET}   "
-        else:
-            status_str = f"{metric_color}      {self.RESET}  "
-        
-        # CPU - 8 chars de largura
-        if service_status['cpu'] is not None:
-            cpu_str = f"{metric_color}{service_status['cpu']:>5.1f}%{self.RESET}  "
-        else:
-            cpu_str = f"{metric_color}        {self.RESET}"
-        
-        # MEM - 5 chars de largura
-        if service_status['mem'] is not None:
-            mem_str = f"{metric_color}{service_status['mem']:>5.0f}M{self.RESET}"
-        else:
-            mem_str = f"{metric_color}      {self.RESET}"
-        
-        return status_str, cpu_str, mem_str
     
     def get_filtered_apps_by_term(self, term):
         """Filtra apps por termo de pesquisa"""
@@ -633,16 +460,6 @@ class InteractiveMenu:
         try:
             self.setup_terminal()
             
-            # Iniciar animação se monitor estiver habilitado e houver serviços rodando
-            if self.monitor_enabled:
-                # Verificar se há algum serviço rodando
-                has_running_services = any(
-                    s.get('status') == 'running' 
-                    for s in self.services_status.values()
-                )
-                if has_running_services:
-                    self._start_animation()
-            
             # Desenhar menu inicial
             self.draw_menu(first_draw=True)
             
@@ -655,26 +472,16 @@ class InteractiveMenu:
                 elif action == 'CONFIRM':
                     return list(self.selected_items)
                 elif action:  # True = redesenhar
-                    # Se a animação NÃO está rodando, redesenhar manualmente
-                    if not self.animation_running:
-                        # Usa o contador de linhas do desenho anterior
-                        lines_to_clear = self.last_drawn_lines
-                        
-                        # Sobe N linhas e limpa cada uma
-                        for _ in range(lines_to_clear):
-                            print(f"\033[1A\033[2K", end="")  # Sobe 1 linha e limpa
-                        
-                        self.draw_menu()
+                    # Usa o contador de linhas do desenho anterior
+                    lines_to_clear = self.last_drawn_lines
+                    
+                    # Sobe N linhas e limpa cada uma
+                    for _ in range(lines_to_clear):
+                        print(f"\033[1A\033[2K", end="")  # Sobe 1 linha e limpa
+                    
+                    self.draw_menu()
                     
         finally:
-            # Parar animação
-            if self.monitor_enabled:
-                self._stop_animation()
-            
-            # Parar monitor Docker
-            if self.docker_monitor:
-                self.docker_monitor.stop_monitoring()
-            
             self.restore_terminal()
     
     def execute_selected_apps(self, selected_modules: List[str]) -> bool:
