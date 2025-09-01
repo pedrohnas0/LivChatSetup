@@ -95,10 +95,7 @@ class N8NSetup(BaseSetup):
         # Aplicar cor bege ao título centralizado
         colored_line = centered_clean.replace(clean_title, f"{self.BEGE}{clean_title}{self.RESET}")
         
-        # Adicionar 2 espaços extras antes da borda direita para movê-la 2 posições para direita
-        extra_spaces = "  "  # 2 espaços para mover borda direita
-        
-        print(f"{self.CINZA}│{colored_line}{extra_spaces}{self.CINZA}│{self.RESET}")
+        print(f"{self.CINZA}│{colored_line}{self.CINZA}│{self.RESET}")
         print(f"{self.CINZA}╰{line}╯{self.RESET}")
     
     def get_user_input(self, prompt: str, required: bool = False, suggestion: str = None) -> str:
