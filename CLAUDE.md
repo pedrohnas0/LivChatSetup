@@ -200,26 +200,26 @@ sudo python3 main.py --verbose
 
 ## 🚀 CRITICAL: ConfigManager Migration Checklist
 
-### Migration Status: 9/18 modules (50% complete)
+### Migration Status: 12/18 modules (67% complete) ⬆️
 
-### ✅ Fully Refactored Modules (9 modules)
+### ✅ Fully Refactored Modules (12 modules)
 1. `basic_setup.py` - ✅ ConfigManager integrated
-2. `smtp_setup.py` - ✅ ConfigManager integrated  
+2. `smtp_setup.py` - ✅ ConfigManager integrated + Central SMTP config
 3. `traefik_setup.py` - ✅ ConfigManager integrated
 4. `portainer_setup.py` - ✅ ConfigManager integrated
 5. `redis_setup.py` - ✅ ConfigManager integrated
 6. `postgres_setup.py` - ✅ ConfigManager integrated
-7. `n8n_setup.py` - ✅ ConfigManager + Success Session
-8. `chatwoot_setup.py` - ✅ Partial (still reads pgvector from dados_vps)
-9. `user_setup.py` - ✅ Hidden module for user data
+7. `n8n_setup.py` - ✅ ConfigManager + Visual Pattern + SMTP + Success Session
+8. `pgvector_setup.py` - ✅ ConfigManager integrated (maintains legacy for compatibility)
+9. `chatwoot_setup.py` - ✅ ConfigManager + Visual Pattern + SMTP + Success Session
+10. `directus_setup.py` - ✅ ConfigManager integrated + Domain suggestions
+11. `user_setup.py` - ✅ Hidden module for user data
+12. `docker_setup.py` - ✅ ConfigManager integrated
 
-### ❌ Pending Refactoring (8 modules - 31 total references)
-Each module below still uses `/root/dados_vps/` and needs migration:
+### ❌ Pending Full Refactoring (6 modules)
 
 | Module | References | Priority | Dependencies |
 |--------|------------|----------|--------------|
-| `pgvector_setup.py` | 4 refs | HIGH | Base for chatwoot/directus |
-| `directus_setup.py` | 1 ref | HIGH | Reads pgvector |
 | `evolution_setup.py` | 2 refs | MEDIUM | Reads postgres/redis |
 | `grafana_setup.py` | 3 refs | MEDIUM | Monitoring stack |
 | `minio_setup.py` | 4 refs | LOW | Independent |
@@ -227,10 +227,26 @@ Each module below still uses `/root/dados_vps/` and needs migration:
 | `passbolt_setup.py` | 10 refs | LOW | Complex refactor |
 | `livchatbridge_setup.py` | ? refs | LOW | Need to verify |
 
-#### 1. `pgvector_setup.py` - Vector Database
+### 📐 Visual Pattern Compliance
+
+All refactored modules MUST follow the N8N visual pattern:
+- ✅ **Good Examples**: `n8n_setup.py`, `smtp_setup.py`
+- ⚠️ **Needs Update**: `chatwoot_setup.py` (ConfigManager OK, visual pattern missing)
+- ❌ **Not Started**: All modules in "Pending Full Refactoring" list
+
+#### Key Visual Requirements:
+1. Color definitions (LARANJA, VERDE, BRANCO, etc.)
+2. `_print_section_box()` method for visual sections
+3. `get_user_input()` method with suggestions
+4. SMTP integration via ConfigManager (NEVER ask for SMTP)
+5. Confirmation flow with visual feedback
+
+#### 1. `evolution_setup.py` - WhatsApp API
 **Lines to change:**
-- **L216**: `os.makedirs("/root/dados_vps", exist_ok=True)` → Remove
-- **L218-220**: File write block → Replace with:
+- **L149-156**: Read postgres password → Use ConfigManager
+- **L169-176**: Read redis password → Use ConfigManager  
+- Add visual pattern methods
+- Integrate SMTP from ConfigManager
 ```python
 credentials_data = {
     'password': self.pgvector_password,
@@ -338,6 +354,172 @@ portainer_config = self.config.get_app_config('portainer')
 host = portainer_config.get('domain')
 ```
 
+## 🎯 Complete Refactoring Requirements
+
+### Core Principles
+1. **ConfigManager Integration** - ALL modules must use ConfigManager
+2. **SMTP Centralization** - NEVER ask for SMTP credentials, use `smtp_setup.py`
+3. **Visual Consistency** - Follow N8N's design pattern exactly
+4. **Domain Intelligence** - Use `config.suggest_domain()` for all domains
+5. **Dependency Management** - Pass ConfigManager to all child modules
+6. **Success Session** - Post-install configuration UI for initial account setup
+
+### Visual Design Standards (N8N Pattern)
+
+#### Color Definitions (REQUIRED in all modules)
+```python
+# Cores para interface (seguindo padrão do projeto)
+LARANJA = "\033[38;5;173m"  # Orange - Para ASCII art e highlights
+VERDE = "\033[32m"          # Green - Para success states e selected items
+BRANCO = "\033[97m"         # Bright white - Para focus states e headings
+BEGE = "\033[93m"           # Beige - Para informational text e legends
+VERMELHO = "\033[91m"       # Red - Para errors e warnings
+CINZA = "\033[90m"          # Gray - Para borders e inactive items
+RESET = "\033[0m"           # Reset - Always close color sequences
+```
+
+#### Required Helper Methods
+```python
+def _get_terminal_width(self) -> int:
+    """Obtém largura do terminal de forma segura"""
+    try:
+        import shutil
+        return shutil.get_terminal_size().columns
+    except:
+        return 80  # Fallback
+
+def _print_section_box(self, title: str, width: int = 60):
+    """Cria box de seção menor seguindo padrão do projeto"""
+    # Implementation from N8N...
+
+def get_user_input(self, prompt: str, required: bool = False, suggestion: str = None) -> str:
+    """Coleta entrada do usuário com sugestão opcional"""
+    # Implementation from N8N...
+```
+
+### SMTP Integration Pattern
+
+#### NEVER Ask for SMTP Credentials!
+```python
+# ❌ WRONG - Never do this!
+smtp_email = input("Digite o email SMTP: ")
+smtp_password = input("Digite a senha SMTP: ")
+
+# ✅ CORRECT - Get from ConfigManager
+smtp_config = self.config.get_app_config("smtp")
+if not smtp_config or not smtp_config.get("configured", False):
+    self._print_section_box("⚠️  SMTP NÃO CONFIGURADO")
+    # Offer to configure SMTP...
+    from setup.smtp_setup import SMTPSetup
+    smtp_setup = SMTPSetup(config_manager=self.config)
+    if not smtp_setup.run():
+        return None
+    smtp_config = self.config.get_app_config("smtp")
+
+# Use SMTP config
+smtp_email = smtp_config['sender_email']
+smtp_user = smtp_config['smtp_username']
+smtp_password = smtp_config['smtp_password']
+```
+
+### Module Dependencies Pattern
+
+#### Always Pass ConfigManager to Child Modules
+```python
+# ❌ WRONG
+installer = PgVectorSetup(network_name=self.network_name)
+
+# ✅ CORRECT
+installer = PgVectorSetup(
+    network_name=self.network_name,
+    config_manager=self.config
+)
+```
+
+### User Input Flow Pattern
+
+#### 1. Section Box
+```python
+self._print_section_box("⚙️  CONFIGURAÇÃO SERVICE_NAME")
+```
+
+#### 2. Domain Suggestions
+```python
+suggested_domain = self.config.suggest_domain("service_name")
+domain = self.get_user_input("Domínio", suggestion=suggested_domain)
+```
+
+#### 3. Credentials Generation
+```python
+# Auto-generate secure passwords
+password = self.config.generate_secure_password(64)
+
+# Get suggested email
+email, _ = self.config.get_suggested_email_and_password("service_name")
+```
+
+#### 4. Visual Confirmation
+```python
+self._print_section_box("📋 CONFIRMAÇÃO DAS CONFIGURAÇÕES")
+print(f"{self.VERDE}🌐{self.RESET} Domínio: {self.BRANCO}{domain}{self.RESET}")
+print(f"{self.VERDE}📧{self.RESET} Email: {self.BRANCO}{email}{self.RESET}")
+```
+
+#### 5. Save to ConfigManager
+```python
+# Save config
+self.config.save_app_config("service_name", {
+    "domain": domain,
+    "configured_at": datetime.now().isoformat()
+})
+
+# Save credentials
+self.config.save_app_credentials("service_name", {
+    "password": password,
+    "email": email,
+    "created_at": datetime.now().isoformat()
+})
+```
+
+### Success Session Pattern (Post-Install)
+
+#### Purpose
+After successful installation, provide a UI for initial account configuration with smart suggestions.
+
+#### Implementation Requirements
+```python
+def _show_success_session(self, domain: str):
+    """Exibe sessão de sucesso para configurar conta inicial"""
+    self._print_section_box("✅ SERVICE INSTALADO COM SUCESSO!")
+    
+    # Show access URL
+    print(f"{self.VERDE}🌐 URL de Acesso: {self.BRANCO}https://{domain}{self.RESET}")
+    
+    # Generate and show suggested credentials
+    suggested = self._generate_suggested_credentials()
+    print(f"{self.BEGE}👤 DADOS SUGERIDOS PARA A CONTA:{self.RESET}")
+    # Show suggestions...
+    
+    # Collect confirmed data
+    final_credentials = self._collect_account_data(suggested)
+    
+    # Save to ConfigManager
+    if final_credentials:
+        self._save_account_credentials(final_credentials)
+        self._show_final_summary(domain, final_credentials)
+```
+
+#### Key Features
+1. **Smart Suggestions**: Auto-generate secure passwords and use existing user data
+2. **Interactive Collection**: Allow user to confirm/modify suggestions
+3. **ConfigManager Integration**: Save account credentials for future reference
+4. **Visual Feedback**: Clear summary with access instructions
+
+#### Services with Success Session
+- ✅ **N8N**: Email, password, first/last name
+- ✅ **Chatwoot**: Name, company, email, password
+- 🔜 **Other services**: To be implemented as needed
+
 ## Refactoring Pattern Template
 
 ### Step 1: Add ConfigManager Import
@@ -347,10 +529,15 @@ from utils.config_manager import ConfigManager
 
 ### Step 2: Update Constructor
 ```python
-def __init__(self, config_manager: ConfigManager = None):
-    super().__init__()
+def __init__(self, network_name: str = None, config_manager: ConfigManager = None):
+    super().__init__("Service Name")
     self.config = config_manager or ConfigManager()
-```
+    self.network_name = network_name
+    
+    # Add color definitions
+    self.LARANJA = "\033[38;5;173m"
+    self.VERDE = "\033[32m"
+    # ... all other colors ...
 
 ### Step 3: Replace File Operations
 ```python

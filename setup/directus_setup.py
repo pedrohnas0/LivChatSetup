@@ -10,11 +10,13 @@ from .base_setup import BaseSetup
 from utils.portainer_api import PortainerAPI
 from utils.cloudflare_api import get_cloudflare_api
 from setup.pgvector_setup import PgVectorSetup
+from utils.config_manager import ConfigManager
 
 class DirectusSetup(BaseSetup):
-    def __init__(self, network_name: str = None):
+    def __init__(self, network_name: str = None, config_manager: ConfigManager = None):
         super().__init__("Instalação do Directus")
         self.portainer = PortainerAPI()
+        self.config = config_manager or ConfigManager()
         self.network_name = network_name
 
     def validate_prerequisites(self) -> bool:
@@ -65,7 +67,7 @@ class DirectusSetup(BaseSetup):
             return True
         self.logger.warning("PgVector não encontrado/rodando. Iniciando instalação automática...")
         try:
-            installer = PgVectorSetup(network_name=self.network_name)
+            installer = PgVectorSetup(network_name=self.network_name, config_manager=self.config)
             if not installer.run():
                 self.logger.error("Falha ao instalar/configurar PgVector")
                 return False
@@ -79,37 +81,76 @@ class DirectusSetup(BaseSetup):
             return False
 
     def _get_pgvector_password(self) -> str:
-        """Obtém senha do PgVector"""
+        """Obtém senha do PgVector via ConfigManager"""
         try:
-            with open("/root/dados_vps/dados_pgvector", 'r') as f:
-                for line in f:
-                    if line.startswith("Senha:"):
-                        return line.split(":", 1)[1].strip()
+            # Obtém do ConfigManager
+            pgvector_creds = self.config.get_app_credentials("pgvector")
+            if pgvector_creds and pgvector_creds.get("password"):
+                return pgvector_creds["password"]
+            
+            # Se não encontrou, tenta o fallback do arquivo legado (temporário)
+            # TODO: Remover após garantir que PgVector sempre salva no ConfigManager
+            try:
+                with open("/root/dados_vps/dados_pgvector", 'r') as f:
+                    for line in f:
+                        if line.startswith("Senha:"):
+                            password = line.split(":", 1)[1].strip()
+                            self.logger.warning("Usando senha do arquivo legado. PgVector deve ser reinstalado para usar ConfigManager.")
+                            return password
+            except FileNotFoundError:
+                pass
+            
+            # Se não encontrou em nenhum lugar, erro fatal
+            raise ValueError("PgVector credentials not found in ConfigManager or legacy file")
+            
         except Exception as e:
             self.logger.error(f"Erro ao obter senha do PgVector: {e}")
-        return ""
+            raise
 
     def collect_user_inputs(self) -> dict:
-        """Coleta informações do usuário e retorna dicionário com variáveis"""
+        """Coleta informações do usuário com sugestões automáticas"""
         print(f"\n📝 CONFIGURAÇÃO DIRECTUS")
         print("─" * 30)
-        domain = input("Digite o domínio para o Directus (ex: cms.seudominio.com): ").strip()
-        admin_email = input("Digite o email do Admin do Directus: ").strip()
-        admin_password = input("Digite a senha do Admin do Directus: ").strip()
+        
+        # Domínio sugerido
+        suggested_domain = self.config.suggest_domain("directus")
+        domain = input(f"Domínio (Enter para '{suggested_domain}' ou digite outro): ").strip()
+        if not domain:
+            domain = suggested_domain
+        
+        # Email e senha sugeridos
+        suggested_email, suggested_password = self.config.get_suggested_email_and_password("directus")
+        
+        admin_email = input(f"Email do Admin (Enter para '{suggested_email}' ou digite outro): ").strip()
+        if not admin_email:
+            admin_email = suggested_email
+        
+        print(f"\n⚠️  Senha do Admin sugerida (64 caracteres seguros): {suggested_password}")
+        admin_password = input("Digite a senha do Admin (Enter para usar a sugerida): ").strip()
+        if not admin_password:
+            admin_password = suggested_password
 
         # Confirmação
-        print(f"\n✅ CONFIRMAÇÃO")
-        print("─" * 20)
-        print(f"Domínio: {domain}")
-        print(f"Admin Email: {admin_email}")
+        print(f"\n📝 RESUMO DA CONFIGURAÇÃO")
+        print("─" * 30)
+        print(f"🌍 Domínio: {domain}")
+        print(f"📧 Admin Email: {admin_email}")
+        
+        # Avisar sobre DNS automático
+        if self.config.is_cloudflare_auto_dns_enabled():
+            print(f"✅ DNS será configurado automaticamente via Cloudflare")
+        else:
+            print(f"⚠️  Você precisará configurar o DNS manualmente")
+        
         confirm = input("\nConfirma as configurações? (s/N): ").strip().lower()
         if confirm not in ['s', 'sim', 'y', 'yes']:
             return None
 
-        encryption_key = self.portainer.generate_hex_key(16)
+        # Gerar encryption key usando ConfigManager
+        encryption_key = self.config.generate_secure_password(32)  # 32 chars para encryption key
         pgvector_password = self._get_pgvector_password()
-
-        return {
+        
+        config_data = {
             'domain': domain,
             'admin_email': admin_email,
             'admin_password': admin_password,
@@ -119,6 +160,22 @@ class DirectusSetup(BaseSetup):
             # Diretriz: Directus reutiliza o mesmo database do Chatwoot por padrão
             'database_name': 'chatwoot'
         }
+        
+        # Salva configuração no ConfigManager
+        self.config.save_app_config("directus", {
+            "domain": domain,
+            "database_name": "chatwoot",
+            "admin_email": admin_email
+        })
+        
+        # Salva credenciais no ConfigManager
+        self.config.save_app_credentials("directus", {
+            "admin_email": admin_email,
+            "admin_password": admin_password,
+            "encryption_key": encryption_key
+        })
+        
+        return config_data
 
     def create_database(self) -> bool:
         """Garante que o database 'chatwoot' exista no PgVector (reutilizado pelo Directus)"""
@@ -144,13 +201,19 @@ class DirectusSetup(BaseSetup):
             return False
 
     def setup_dns_records(self, domain: str) -> bool:
-        """Configura registros DNS via Cloudflare"""
-        self.logger.info("Configurando registros DNS via Cloudflare...")
-        cf = get_cloudflare_api(self.logger)
+        """Configura registros DNS via Cloudflare integrado ao ConfigManager"""
+        if not self.config.is_cloudflare_auto_dns_enabled():
+            self.logger.info("DNS automático não configurado, pulando...")
+            return True
+            
+        self.logger.info("🌐 Configurando registros DNS via Cloudflare...")
+        cf = get_cloudflare_api(logger=self.logger, config_manager=self.config)
         if not cf:
-            self.logger.error("Falha ao inicializar Cloudflare API")
+            self.logger.error("❌ Falha ao inicializar Cloudflare API")
             return False
-        return cf.setup_dns_for_service("Directus", [domain])
+            
+        # Usa novo método integrado
+        return cf.create_app_dns_record("directus", domain)
 
     def run(self) -> bool:
         """Executa instalação do Directus"""

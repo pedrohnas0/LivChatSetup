@@ -8,10 +8,13 @@ import os
 from .base_setup import BaseSetup
 from utils.template_engine import TemplateEngine
 from utils.portainer_api import PortainerAPI
+from utils.config_manager import ConfigManager
+from datetime import datetime
 
 class PgVectorSetup(BaseSetup):
-    def __init__(self, network_name: str = None):
+    def __init__(self, network_name: str = None, config_manager: ConfigManager = None):
         super().__init__("Instalação do PostgreSQL com PgVector")
+        self.config = config_manager or ConfigManager()
         self.pgvector_password = None
         self.network_name = network_name
 
@@ -188,11 +191,67 @@ class PgVectorSetup(BaseSetup):
             self.logger.error(f"Erro ao verificar stack PgVector: {e}")
             return False
 
+    def _is_pgvector_running(self) -> bool:
+        """Verifica se o PgVector já está rodando"""
+        try:
+            # Verifica se a stack existe
+            result = subprocess.run(
+                "docker stack ls --format '{{.Name}}'",
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0 and 'pgvector' in result.stdout:
+                # Verifica se o serviço está rodando
+                service_result = subprocess.run(
+                    "docker service ps pgvector_pgvector --format '{{.CurrentState}}'",
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                
+                if service_result.returncode == 0 and "Running" in service_result.stdout:
+                    self.logger.info("PgVector já está rodando")
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            self.logger.debug(f"Erro ao verificar PgVector: {e}")
+            return False
+    
     def save_credentials(self):
         """Salva as credenciais do PgVector"""
         self.logger.info("Salvando credenciais do PgVector")
         
-        credentials = f"""[ POSTGRESQL + PGVECTOR ]
+        # Salva no ConfigManager (novo método)
+        credentials_data = {
+            'password': self.pgvector_password,
+            'host': 'pgvector',
+            'port': '5432',
+            'database': 'vectordb',
+            'username': 'postgres',
+            'connection_string': f'postgresql://postgres:{self.pgvector_password}@pgvector:5432/vectordb'
+        }
+        
+        try:
+            # Salva no ConfigManager
+            self.config.save_app_credentials('pgvector', credentials_data)
+            self.config.save_app_config('pgvector', {
+                'host': 'pgvector',
+                'port': 5432,
+                'database': 'vectordb',
+                'extensions': ['vector'],
+                'configured_at': datetime.now().isoformat()
+            })
+            self.logger.info("Credenciais salvas no ConfigManager")
+            
+            # Mantém arquivo legado para compatibilidade temporária
+            # TODO: Remover após migração completa de todos os módulos
+            credentials_legacy = f"""[ POSTGRESQL + PGVECTOR ]
 
 Host: pgvector
 Port: 5432
@@ -210,16 +269,16 @@ Exemplo de uso:
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE TABLE embeddings (id bigserial PRIMARY KEY, embedding vector(1536));
 """
-        
-        try:
+            
             # Cria diretório se não existir
             os.makedirs("/root/dados_vps", exist_ok=True)
             
             with open("/root/dados_vps/dados_pgvector", 'w') as f:
-                f.write(credentials)
+                f.write(credentials_legacy)
             
-            self.logger.info("Credenciais salvas em /root/dados_vps/dados_pgvector")
+            self.logger.info("Arquivo legado mantido em /root/dados_vps/dados_pgvector para compatibilidade")
             return True
+            
         except Exception as e:
             self.logger.error(f"Erro ao salvar credenciais: {e}")
             return False
@@ -227,6 +286,15 @@ CREATE TABLE embeddings (id bigserial PRIMARY KEY, embedding vector(1536));
     def run(self):
         """Executa a instalação completa do PgVector"""
         self.logger.info("Iniciando instalação do PostgreSQL com PgVector")
+        
+        # Verifica se já está instalado e rodando
+        if self._is_pgvector_running():
+            # Verifica se as credenciais existem no ConfigManager
+            existing_creds = self.config.get_app_credentials('pgvector')
+            if existing_creds and existing_creds.get('password'):
+                self.logger.info("PgVector já está rodando e configurado, pulando instalação")
+                self.pgvector_password = existing_creds['password']
+                return True
         
         # Verifica se Docker Swarm está ativo
         if not self.is_swarm_active():
@@ -260,6 +328,6 @@ CREATE TABLE embeddings (id bigserial PRIMARY KEY, embedding vector(1536));
         
         self.logger.info("Instalação do PgVector concluída com sucesso")
         self.logger.info(f"Senha gerada: {self.pgvector_password}")
-        self.logger.info("Credenciais salvas em /root/dados_vps/dados_pgvector")
+        self.logger.info("Credenciais salvas no ConfigManager e arquivo legado para compatibilidade")
         
         return True

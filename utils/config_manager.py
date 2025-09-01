@@ -235,9 +235,24 @@ class ConfigManager:
     
     # Métodos de Credenciais
     def generate_secure_password(self, length: int = 64) -> str:
-        """Gera senha segura"""
-        alphabet = string.ascii_letters + string.digits
-        return ''.join(secrets.choice(alphabet) for _ in range(length))
+        """Gera senha segura com caracteres especiais"""
+        # Inclui letras, números e caracteres especiais comuns
+        alphabet = string.ascii_letters + string.digits + '@#$%&*'
+        
+        # Garante que a senha tenha pelo menos um de cada tipo
+        password = []
+        password.append(secrets.choice(string.ascii_lowercase))
+        password.append(secrets.choice(string.ascii_uppercase))
+        password.append(secrets.choice(string.digits))
+        password.append(secrets.choice('@#$%&*'))
+        
+        # Preenche o resto com caracteres aleatórios
+        for _ in range(length - 4):
+            password.append(secrets.choice(alphabet))
+        
+        # Embaralha para evitar padrão previsível
+        secrets.SystemRandom().shuffle(password)
+        return ''.join(password)
     
     def save_app_credentials(self, app_name: str, credentials: Dict[str, Any]):
         """Salva credenciais de uma aplicação"""
