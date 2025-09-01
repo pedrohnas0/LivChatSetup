@@ -50,8 +50,8 @@ class InteractiveMenuDemo:
         # Para controle de linhas do menu anterior
         self.last_drawn_lines = 20
         
-        # Largura expandida para acomodar STATUS e CPU
-        self.menu_width = 105  # Aumentado de 81 para 105
+        # Largura ajustada: conteúdo termina em ~80, +12 espaços = 92 total
+        self.menu_width = 92
     
     def _generate_apps_with_status(self):
         """Gera lista de apps com status fake"""
@@ -329,7 +329,7 @@ class InteractiveMenuDemo:
                 if status_icon:
                     clean_name += " ✓"  # Adiciona 2 chars para o ícone
                 
-                # Total de espaço para aplicação: 52 chars (do cursor até STATUS)
+                # Total de espaço para aplicação: 60 chars (do cursor até STATUS)
                 app_section_length = len(f"{cursor}{symbol} {item_number} {clean_name}")
                 padding_to_status = 60 - app_section_length
                 
@@ -341,10 +341,10 @@ class InteractiveMenuDemo:
                     # Item com cursor - nome em branco
                     line_content = f"{self.BRANCO}{cursor}{symbol_color}{symbol}{self.BRANCO} {item_number} {name}{status_icon}{' ' * padding_to_status}{self.RESET}{status_str}{cpu_str}{mem_str}"
                 else:
-                    # Item normal - nome em cinza, apenas símbolo pode ser verde
+                    # Item normal
                     if is_selected:
-                        # Símbolo verde, resto cinza
-                        line_content = f"{cursor}{symbol_color}{symbol}{self.CINZA} {item_number} {name}{status_icon}{' ' * padding_to_status}{self.RESET}{status_str}{cpu_str}{mem_str}"
+                        # TODA LINHA VERDE quando selecionada
+                        line_content = f"{self.VERDE}{cursor}{symbol} {item_number} {name}{status_icon}{' ' * padding_to_status}{self.RESET}{status_str}{cpu_str}{mem_str}"
                     else:
                         # Tudo cinza
                         line_content = f"{self.CINZA}{cursor}{symbol} {item_number} {name}{status_icon}{' ' * padding_to_status}{self.RESET}{status_str}{cpu_str}{mem_str}"
@@ -378,13 +378,17 @@ class InteractiveMenuDemo:
         if is_current:
             metric_color = self.BRANCO
         else:
-            metric_color = self.CINZA
+            # Se o item está selecionado, métricas também ficam verdes
+            if app["id"] in self.selected_items:
+                metric_color = self.VERDE
+            else:
+                metric_color = self.CINZA
         
-        # STATUS (réplicas) - 8 chars de largura
+        # STATUS (réplicas) - ajustado para alinhar 2 espaços à esquerda
         if app["replicas"]:
-            status_str = f"{metric_color}{app['replicas']:>7}{self.RESET} "
+            status_str = f"{metric_color}{app['replicas']:>5}{self.RESET}   "
         else:
-            status_str = f"{metric_color}        {self.RESET}"
+            status_str = f"{metric_color}      {self.RESET}  "
         
         # CPU - 8 chars de largura
         if app["id"] in self.cpu_mem_cache and "cpu" in self.cpu_mem_cache[app["id"]]:
@@ -393,12 +397,12 @@ class InteractiveMenuDemo:
         else:
             cpu_str = f"{metric_color}        {self.RESET}"
         
-        # MEM - 5 chars de largura
+        # MEM - 5 chars de largura (movido 1 espaço para direita)
         if app["id"] in self.cpu_mem_cache and "mem" in self.cpu_mem_cache[app["id"]]:
             mem_val = self.cpu_mem_cache[app["id"]]["mem"]
-            mem_str = f"{metric_color}{mem_val:>4.0f}M{self.RESET}"
+            mem_str = f"{metric_color}{mem_val:>5.0f}M{self.RESET}"
         else:
-            mem_str = f"{metric_color}     {self.RESET}"
+            mem_str = f"{metric_color}      {self.RESET}"
         
         return status_str, cpu_str, mem_str
     
