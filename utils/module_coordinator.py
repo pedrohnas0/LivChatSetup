@@ -885,33 +885,15 @@ class ModuleCoordinator:
         if selected_modules == ['cleanup']:
             return self.execute_module('cleanup')
         
-        # Verificar se 'basic' foi selecionado explicitamente pelo usuário
-        basic_explicitly_selected = 'basic' in selected_modules
-        
-        # Se basic foi selecionado explicitamente, manter na lista para forçar execução
-        if not basic_explicitly_selected:
-            # Se basic não foi selecionado explicitamente, usar collect_global_config 
-            # que verifica se já está completo antes de executar
-            self.collect_global_config()
-        else:
-            # Basic foi selecionado explicitamente, remover da lista mas garantir execução
-            selected_modules = [m for m in selected_modules if m != 'basic']
-            # Forçar execução do BasicSetup mesmo se já configurado (reconfiguração)
-            self.logger.info("Setup básico selecionado explicitamente - executando configuração")
-            basic_setup = BasicSetup(config_manager=self.config)
-            if not basic_setup.run():
-                self.logger.error("Falha na configuração básica explícita")
-                return False
-        
-        # Se não sobrou nenhum módulo além do basic, retorna sucesso
-        if not selected_modules:
-            self.logger.info("Configuração básica concluída. Nenhum módulo adicional selecionado.")
-            return True
-        
-        # Resolve dependências (precisa manter referência dos módulos originalmente selecionados)
+        # Mantém referência dos módulos originalmente selecionados pelo usuário
         original_selected = selected_modules.copy()
-        if basic_explicitly_selected:
-            original_selected.append('basic')  # Adiciona basic de volta para a lista de explicitamente selecionados
+        
+        # Se basic não está configurado e não foi selecionado, adiciona como dependência
+        if not self.is_basic_config_complete() and 'basic' not in selected_modules:
+            # Adiciona 'basic' no início da lista de módulos a executar
+            selected_modules = ['basic'] + selected_modules
+        
+        # Resolve dependências
         ordered_modules = self.resolve_dependencies(selected_modules, original_selected)
         
         self._print_section_box("📋 ORDEM DE INSTALAÇÃO", 50)
