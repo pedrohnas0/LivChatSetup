@@ -198,155 +198,266 @@ sudo python3 main.py --verbose
 - Centralized configuration persistence
 - Smart domain suggestions using Cloudflare
 
-## 🚀 CRITICAL: ConfigManager Migration Checklist
+## 🚀 CHECKLIST COMPLETA DE REFATORAÇÃO
 
-### Migration Status: 14/20 components (70% complete) ⬆️
+### Status Geral: 12/20 módulos (60% completos) | 8 módulos pendentes
 
-### 🎯 dados_vps Status Summary
+### 📊 RESUMO DE STATUS
 
-**ELIMINAÇÃO COMPLETA dos escritas em dados_vps:**
-- ✅ **cloudflare_api.py**: v4.0 - APENAS Global API Key, 100% ConfigManager
-- ✅ **module_coordinator.py**: 100% ConfigManager, métodos legacy deprecated
-- ✅ **config_manager.py**: Mantém migração automática (útil para upgrades)
+**✅ Componentes Core Refatorados:**
+- **cloudflare_api.py**: v4.0 - APENAS Global API Key
+- **module_coordinator.py**: 100% ConfigManager
+- **config_manager.py**: Migração automática funcional
+- **Registros DNS**: CNAME por padrão (exceto Portainer)
 
-**Resultado:** Sistema agora **NÃO ESCREVE** mais em `/root/dados_vps/`
-- Apenas **lê para migração** automática quando necessário
-- Todos os dados centralizados em `/root/livchat-config.json`
-- Cloudflare usa **APENAS Global API Key** com email (design original restaurado)
+**🎯 Meta Final:**
+- Eliminar 100% das referências a `/root/dados_vps/`
+- Todos os dados em `/root/livchat-config.json`
+- Padrão visual unificado em todos os módulos
+- Integração completa com Portainer API
 
-### ✅ Utility Components Fully Refactored (2 components)
-1. **cloudflare_api.py** - v4.0 - APENAS Global API Key, zero dados_vps
-2. **module_coordinator.py** - All methods use ConfigManager, Swarm check fixed
+### 🛠️ COMPONENTES UTILITÁRIOS
 
-### ✅ Fully Refactored Modules (12 modules)
-1. `basic_setup.py` - ✅ ConfigManager integrated
-2. `smtp_setup.py` - ✅ ConfigManager integrated + Central SMTP config
-3. `traefik_setup.py` - ✅ ConfigManager integrated
-4. `portainer_setup.py` - ✅ ConfigManager integrated
-5. `redis_setup.py` - ✅ ConfigManager integrated
-6. `postgres_setup.py` - ✅ ConfigManager integrated
-7. `n8n_setup.py` - ✅ ConfigManager + Visual Pattern + SMTP + Success Session
-8. `pgvector_setup.py` - ✅ ConfigManager integrated (maintains legacy for compatibility)
-9. `chatwoot_setup.py` - ✅ ConfigManager + Visual Pattern + SMTP + Success Session
-10. `directus_setup.py` - ✅ ConfigManager integrated + Domain suggestions
-11. `user_setup.py` - ✅ Hidden module for user data
-12. `docker_setup.py` - ✅ ConfigManager integrated
+#### ✅ Totalmente Refatorados
+- [ ] ✅ **cloudflare_api.py**
+  - [x] ConfigManager integrado
+  - [x] Global API Key apenas
+  - [x] Zero dados_vps
+  - [x] CNAME por padrão
+  
+- [ ] ✅ **module_coordinator.py**
+  - [x] ConfigManager integrado
+  - [x] Métodos legacy deprecated
+  - [x] Swarm check corrigido
+  - [x] Zero dados_vps
 
-### ❌ Pending Full Refactoring (6 modules)
+### 📦 MÓDULOS DE APLICAÇÃO
 
-| Module | References | Priority | Dependencies |
-|--------|------------|----------|--------------|
-| `evolution_setup.py` | 2 refs | MEDIUM | Reads postgres/redis |
-| `grafana_setup.py` | 3 refs | MEDIUM | Monitoring stack |
-| `minio_setup.py` | 4 refs | LOW | Independent |
-| `gowa_setup.py` | 3 refs | LOW | Independent |
-| `passbolt_setup.py` | 10 refs | LOW | Complex refactor |
-| `livchatbridge_setup.py` | ? refs | LOW | Need to verify |
+#### 🏗️ INFRAESTRUTURA BÁSICA
+- [ ] ✅ **basic_setup.py**
+  - [x] ConfigManager integrado
+  - [x] Visual pattern implementado
+  - [x] Zero dados_vps
+  - [x] Cloudflare com email
+  
+- [ ] ✅ **docker_setup.py**
+  - [x] ConfigManager integrado
+  - [x] Swarm sempre inicializado
+  - [x] Zero dados_vps
+  
+- [ ] ✅ **traefik_setup.py**
+  - [x] ConfigManager integrado
+  - [x] Visual pattern básico
+  - [x] Zero dados_vps
+  - [x] SSL automático
+  
+- [ ] ✅ **portainer_setup.py**
+  - [x] ConfigManager integrado
+  - [x] Visual pattern completo
+  - [x] Zero dados_vps
+  - [x] Registro A (único)
+  - [x] API de deploy configurada
+  
+- [ ] ✅ **smtp_setup.py**
+  - [x] ConfigManager integrado
+  - [x] Visual pattern completo
+  - [x] Zero dados_vps
+  - [x] Config centralizada
+  
+- [ ] ⚠️ **hostname_setup.py**
+  - [x] Zero dados_vps
+  - [ ] ConfigManager pendente
+  - [ ] Visual pattern pendente
+  
+- [ ] ⚠️ **cleanup_setup.py**
+  - [x] Zero dados_vps
+  - [ ] ConfigManager não necessário
+  - [ ] Visual pattern pendente
 
-### 📐 Visual Pattern Compliance
+#### 💾 BANCOS DE DADOS
 
-All refactored modules MUST follow the N8N visual pattern:
-- ✅ **Good Examples**: `n8n_setup.py`, `smtp_setup.py`
-- ⚠️ **Needs Update**: `chatwoot_setup.py` (ConfigManager OK, visual pattern missing)
-- ❌ **Not Started**: All modules in "Pending Full Refactoring" list
+- [ ] ✅ **postgres_setup.py**
+  - [x] ConfigManager integrado
+  - [x] Zero dados_vps
+  - [x] Portainer API
+  - [ ] Visual pattern pendente
+  
+- [ ] ✅ **redis_setup.py**
+  - [x] ConfigManager integrado
+  - [x] Zero dados_vps
+  - [x] Portainer API
+  - [ ] Visual pattern pendente
+  
+- [ ] ⚠️ **pgvector_setup.py**
+  - [x] ConfigManager parcial
+  - [x] Mantém legacy para compatibilidade
+  - [ ] Visual pattern pendente
+  - [ ] ❌ 3 refs dados_vps
 
-#### Key Visual Requirements:
-1. Color definitions (LARANJA, VERDE, BRANCO, etc.)
-2. `_print_section_box()` method for visual sections
-3. `get_user_input()` method with suggestions
-4. SMTP integration via ConfigManager (NEVER ask for SMTP)
-5. Confirmation flow with visual feedback
+#### 🚀 APLICAÇÕES PRINCIPAIS
 
-#### 1. `evolution_setup.py` - WhatsApp API
-**Lines to change:**
-- **L149-156**: Read postgres password → Use ConfigManager
-- **L169-176**: Read redis password → Use ConfigManager  
-- Add visual pattern methods
-- Integrate SMTP from ConfigManager
-```python
-credentials_data = {
-    'password': self.pgvector_password,
-    'host': 'postgres',
-    'port': '5432',
-    'database': 'pgvector',
-    'created_at': datetime.now().isoformat()
-}
-self.config.save_app_credentials('pgvector', credentials_data)
-```
-- **L221, L263**: Update log messages to reference ConfigManager
+- [ ] ✅ **n8n_setup.py**
+  - [x] ConfigManager integrado
+  - [x] Visual pattern completo
+  - [x] Zero dados_vps
+  - [x] SMTP centralizado
+  - [x] Success session
+  - [x] CNAME configurado
+  
+- [ ] ⚠️ **chatwoot_setup.py**
+  - [x] ConfigManager integrado
+  - [x] Visual pattern completo
+  - [x] SMTP centralizado
+  - [x] Success session
+  - [ ] ❌ 1 ref dados_vps
+  
+- [ ] ⚠️ **directus_setup.py**
+  - [x] ConfigManager integrado
+  - [ ] Visual pattern pendente
+  - [x] Domain suggestions
+  - [ ] ❌ 1 ref dados_vps (pgvector)
+  
+- [ ] ❌ **evolution_setup.py**
+  - [ ] ConfigManager pendente
+  - [ ] Visual pattern pendente
+  - [ ] SMTP pendente
+  - [ ] ❌ 2 refs dados_vps (postgres/redis)
+  
+- [ ] ❌ **minio_setup.py**
+  - [ ] ConfigManager pendente
+  - [ ] Visual pattern pendente
+  - [ ] ❌ 4 refs dados_vps
+  
+- [ ] ❌ **grafana_setup.py**
+  - [ ] ConfigManager pendente
+  - [ ] Visual pattern pendente
+  - [ ] ❌ 3 refs dados_vps
+  
+- [ ] ❌ **passbolt_setup.py**
+  - [ ] ConfigManager pendente
+  - [ ] Visual pattern pendente
+  - [ ] ❌ 10 refs dados_vps (mais complexo)
+  
+- [ ] ❌ **gowa_setup.py**
+  - [ ] ConfigManager pendente
+  - [ ] Visual pattern pendente
+  - [ ] ❌ 3 refs dados_vps
+  
+- [ ] ⚠️ **livchatbridge_setup.py**
+  - [x] ConfigManager parcial
+  - [x] Visual pattern básico
+  - [x] Zero dados_vps
+  - [ ] Integração completa pendente
 
-#### 2. `minio_setup.py` - S3 Storage
-**Lines to change:**
-- **L260-263**: File write → `self.config.save_app_credentials('minio', credentials)`
-- Add domain suggestion: `self.config.suggest_domain('minio')`
+### 📋 PADRÕES DE REFATORAÇÃO OBRIGATÓRIOS
 
-#### 3. `directus_setup.py` - Headless CMS  
-**Lines to change:**
-- **L84**: Read pgvector credentials:
-```python
-# OLD
-with open("/root/dados_vps/dados_pgvector", 'r') as f:
-# NEW
-pgvector_creds = self.config.get_app_credentials('pgvector')
-password = pgvector_creds.get('password')
-```
+#### 📋 CHECKLIST DE REFATORAÇÃO POR MÓDULO
 
-#### 4. `evolution_setup.py` - WhatsApp API (2 references)
-**Complete refactor needed:**
-```python
-# L149-156: OLD - Reading postgres password
-creds_path = "/root/dados_vps/dados_postgres"
-if not os.path.exists(creds_path):
-    self.logger.error("Arquivo de credenciais do PostgreSQL não encontrado")
-with open(creds_path, 'r') as f:
-    for line in f:
-        if "Password:" in line:
-            return line.split(":")[1].strip()
+Cada módulo deve implementar TODOS os seguintes padrões:
 
-# NEW - Using ConfigManager
-postgres_creds = self.config.get_app_credentials('postgres')
-if not postgres_creds:
-    self.logger.error("PostgreSQL credentials not found in ConfigManager")
-    return None
-return postgres_creds.get('password')
-```
+- [ ] **1. ConfigManager**
+  - [ ] Importar ConfigManager
+  - [ ] Passar no construtor
+  - [ ] Usar `save_app_config()` e `save_app_credentials()`
+  - [ ] Eliminar TODOS os `/root/dados_vps/` writes
+  - [ ] Implementar migração automática se necessário
 
-**Same pattern for Redis (L169-176)**
+- [ ] **2. Padrão Visual**
+  - [ ] Definir cores (LARANJA, VERDE, BRANCO, etc.)
+  - [ ] Implementar `_print_section_box()`
+  - [ ] Implementar `get_user_input()` com sugestões
+  - [ ] ASCII art consistente
 
-#### 5. `grafana_setup.py` - Monitoring Stack (3 references)
-**Lines to change:**
-```python
-# L319-322: OLD - File write
-os.makedirs("/root/dados_vps", exist_ok=True)
-with open("/root/dados_vps/dados_grafana", 'w', encoding='utf-8') as f:
-    f.write(credentials_text)
+- [ ] **3. Integração SMTP**
+  - [ ] NUNCA pedir credenciais SMTP
+  - [ ] Usar `config.get_app_config("smtp")`
+  - [ ] Oferecer configurar se não existir
 
-# NEW - ConfigManager save
-credentials_data = {
-    'admin_password': grafana_admin_password,
-    'domain': grafana_domain,
-    'created_at': datetime.now().isoformat()
-}
-self.config.save_app_credentials('grafana', credentials_data)
-self.config.save_app_config('grafana', {
-    'domain': grafana_domain,
-    'configured_at': datetime.now().isoformat()
-})
-```
+- [ ] **4. DNS Inteligente**
+  - [ ] Usar `config.suggest_domain()`
+  - [ ] CNAME por padrão (exceto Portainer)
+  - [ ] Integração com Cloudflare API
 
-#### 6. `gowa_setup.py` - WhatsApp Multi-Device
-**Lines to change:**
-- **L169**: File write → `self.config.save_app_credentials('gowa', credentials)`
+- [ ] **5. Deploy via Portainer**
+  - [ ] Usar PortainerAPI para deploy
+  - [ ] Templates Jinja2 padronizados
+  - [ ] Labels Traefik corretas
 
-#### 7. `passbolt_setup.py` - Password Manager
-**Lines to change:**
-- **L29**: Remove `self.credentials_path`
-- Implement `save_app_credentials()` for all saves
+- [ ] **6. Success Session**
+  - [ ] Mostrar URL de acesso
+  - [ ] Sugerir credenciais inteligentes
+  - [ ] Coletar confirmação do usuário
+  - [ ] Salvar no ConfigManager
 
-#### 8. `livchatbridge_setup.py` - Webhook Connector
-- Verify and add ConfigManager if missing
+### 🎯 PRIORIDADES DE REFATORAÇÃO
 
-### 🔧 Utility Files (2 files)
+#### 🔴 PRIORIDADE ALTA (Bloqueiam outros módulos)
+
+1. **evolution_setup.py** (2 refs dados_vps)
+   - L149-156: Ler senha postgres → ConfigManager
+   - L169-176: Ler senha redis → ConfigManager
+   - Adicionar padrão visual completo
+   - Integrar SMTP centralizado
+
+2. **directus_setup.py** (1 ref dados_vps) 
+   - L84: Ler credenciais pgvector → ConfigManager
+   - Adicionar padrão visual completo
+   - Já tem domain suggestions ✅
+
+3. **pgvector_setup.py** (3 refs dados_vps)
+   - Completar migração ConfigManager
+   - Remover legacy compatibility
+   - Adicionar padrão visual
+
+#### 🟡 PRIORIDADE MÉDIA (Independentes)
+
+4. **minio_setup.py** (4 refs dados_vps)
+   - L260-263: Salvar credenciais → ConfigManager
+   - Adicionar domain suggestions
+   - Adicionar padrão visual completo
+
+5. **grafana_setup.py** (3 refs dados_vps)
+   - L319-322: Salvar credenciais → ConfigManager
+   - Adicionar monitoring integrations
+   - Adicionar padrão visual completo
+
+6. **gowa_setup.py** (3 refs dados_vps)
+   - L169: Salvar credenciais → ConfigManager
+   - Adicionar padrão visual completo
+   - Integrar com Evolution API
+
+#### 🟢 PRIORIDADE BAIXA (Complexos)
+
+7. **passbolt_setup.py** (10 refs dados_vps - MAIS COMPLEXO)
+   - L29: Remover credentials_path
+   - L168, 247, 294, 458, 486, 586: Múltiplas escritas
+   - Requer refatoração completa
+   - Debug logs precisam migração
+
+8. **chatwoot_setup.py** (1 ref dados_vps)
+   - Finalizar remoção última referência
+   - Visual pattern já OK ✅
+   - SMTP já integrado ✅
+
+### 📊 ESTATÍSTICAS DA REFATORAÇÃO
+
+**Módulos Totais:** 20
+- ✅ **Completos:** 8 (40%)
+- ⚠️ **Parciais:** 4 (20%)
+- ❌ **Pendentes:** 8 (40%)
+
+**Referências dados_vps:**
+- Total: 27 referências em 8 arquivos
+- passbolt_setup.py: 10 refs (mais complexo)
+- minio_setup.py: 4 refs
+- pgvector_setup.py: 3 refs
+- grafana_setup.py: 3 refs
+- gowa_setup.py: 3 refs
+- evolution_setup.py: 2 refs
+- directus_setup.py: 1 ref
+- chatwoot_setup.py: 1 ref
+
+### 🔧 ARQUIVOS UTILITÁRIOS
 
 #### ✅ `utils/module_coordinator.py` - **REFATORAÇÃO COMPLETA**
 **Status: CONCLUÍDO** - Todos os métodos migrados para ConfigManager
