@@ -544,10 +544,11 @@ class CloudflareAPI:
         return None
     
     def setup_dns_for_service(self, service_name: str, domains: List[str], 
-                            target_domain: str = None, record_type: str = "A") -> bool:
+                            target_domain: str = None, record_type: str = "CNAME") -> bool:
         """Configura DNS para um serviço específico
         
-        Por padrão usa registro A (direto para IP) em vez de CNAME
+        Por padrão usa registro CNAME (apontando para o Portainer)
+        Apenas o Portainer deve usar registro A (direto para IP)
         """
         self.logger.info(f"🌐 Configurando DNS para {service_name}")
         
