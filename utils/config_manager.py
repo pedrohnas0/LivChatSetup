@@ -223,14 +223,20 @@ class ConfigManager:
         """Obtém configuração completa do Cloudflare"""
         return self.config_data.get("cloudflare", {})
     
-    def set_cloudflare_config(self, api_token: str, zone_id: str, zone_name: str):
-        """Define configuração do Cloudflare"""
-        self.config_data["cloudflare"].update({
-            "api_token": api_token,
+    def set_cloudflare_config(self, api_token: str, zone_id: str, zone_name: str, email: str = None):
+        """Define configuração do Cloudflare com Global API Key"""
+        cloudflare_config = {
+            "api_token": api_token,  # Global API Key
             "zone_id": zone_id,
             "zone_name": zone_name,
             "enabled": True
-        })
+        }
+        
+        # Adiciona email se fornecido (necessário para Global API Key)
+        if email:
+            cloudflare_config["email"] = email
+        
+        self.config_data["cloudflare"].update(cloudflare_config)
         self.save_config()
     
     # Métodos de Credenciais

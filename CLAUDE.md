@@ -200,7 +200,23 @@ sudo python3 main.py --verbose
 
 ## 🚀 CRITICAL: ConfigManager Migration Checklist
 
-### Migration Status: 12/18 modules (67% complete) ⬆️
+### Migration Status: 14/20 components (70% complete) ⬆️
+
+### 🎯 dados_vps Status Summary
+
+**ELIMINAÇÃO COMPLETA dos escritas em dados_vps:**
+- ✅ **cloudflare_api.py**: v4.0 - APENAS Global API Key, 100% ConfigManager
+- ✅ **module_coordinator.py**: 100% ConfigManager, métodos legacy deprecated
+- ✅ **config_manager.py**: Mantém migração automática (útil para upgrades)
+
+**Resultado:** Sistema agora **NÃO ESCREVE** mais em `/root/dados_vps/`
+- Apenas **lê para migração** automática quando necessário
+- Todos os dados centralizados em `/root/livchat-config.json`
+- Cloudflare usa **APENAS Global API Key** com email (design original restaurado)
+
+### ✅ Utility Components Fully Refactored (2 components)
+1. **cloudflare_api.py** - v4.0 - APENAS Global API Key, zero dados_vps
+2. **module_coordinator.py** - All methods use ConfigManager, Swarm check fixed
 
 ### ✅ Fully Refactored Modules (12 modules)
 1. `basic_setup.py` - ✅ ConfigManager integrated
@@ -332,27 +348,43 @@ self.config.save_app_config('grafana', {
 
 ### 🔧 Utility Files (2 files)
 
-#### `utils/module_coordinator.py`
-**Lines to change:**
-- **L400**: `return "/root/dados_vps/dados_network"`
-```python
-# Replace with ConfigManager call
-network_name = self.config.get_global_config().get('network_name')
-```
-- **L406**: `_read_dados_vps_value()` calls
-- **L425**: Remove directory creation
+#### ✅ `utils/module_coordinator.py` - **REFATORAÇÃO COMPLETA**
+**Status: CONCLUÍDO** - Todos os métodos migrados para ConfigManager
 
-#### `utils/cloudflare_api.py`  
-**Lines to change:**
-- **L78**: Migration from old file
-- **L389-391**: Read Portainer config:
-```python
-# OLD
-creds_path = "/root/dados_vps/dados_portainer"
-# NEW  
-portainer_config = self.config.get_app_config('portainer')
-host = portainer_config.get('domain')
-```
+**Métodos Refatorados:**
+- ✅ `_load_network_name()` - Agora usa ConfigManager com migração automática
+- ✅ `_save_network_name()` - Salva direto no ConfigManager  
+- ✅ `_load_hostname()` - Usa ConfigManager com fallback para migração
+- ✅ `_save_hostname()` - Salva direto no ConfigManager
+- ✅ `_read_dados_vps_value()` - Mapeia para ConfigManager (deprecated)
+- ✅ `_upsert_dados_vps()` - Usa ConfigManager internamente (deprecated)
+
+**Funcionalidades:**
+- Migração automática de arquivos antigos na primeira leitura
+- Todos os dados salvos em `/root/livchat-config.json`
+- Métodos deprecated mantidos para compatibilidade
+- Zero escrita em `/root/dados_vps/`
+
+#### ✅ `utils/cloudflare_api.py` - **REFATORAÇÃO COMPLETA (v4.0 - Global API Key Only)**
+**Status: CONCLUÍDO** - Módulo usa APENAS Global API Key como no design original
+
+**Funcionalidades Implementadas:**
+- ✅ Suporte **EXCLUSIVO** para **Global API Key + Email** (design original)
+- ✅ Autenticação via headers `X-Auth-Email` e `X-Auth-Key`
+- ✅ Integração total com ConfigManager
+- ✅ Método único: `setup_credentials()` com email obrigatório
+- ✅ Teste de conexão validando credenciais Global API Key
+- ✅ Gestão completa de DNS (A, CNAME, atualizações)
+- ✅ Auto-detecção de IP público
+- ✅ Sugestão inteligente de domínios via ConfigManager
+- ✅ Factory function `get_cloudflare_api()` simplificada
+
+**Mudanças Principais:**
+1. **Removido** todas as referências a `/root/dados_vps/`
+2. **Removido** suporte a API Tokens - APENAS Global API Key
+3. **Email obrigatório** salvo no ConfigManager junto com API Key
+4. **Portainer domain** agora vem do ConfigManager
+5. **Autenticação única** como no repositório original
 
 ## 🎯 Complete Refactoring Requirements
 

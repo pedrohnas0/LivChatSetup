@@ -397,125 +397,126 @@ class ModuleCoordinator:
         return False
 
     def _network_store_path(self) -> str:
-        """Caminho do arquivo de persistência do nome da rede"""
+        """Caminho do arquivo de persistência do nome da rede - DEPRECATED"""
+        # Método mantido para compatibilidade, mas não é mais usado
         return "/root/dados_vps/dados_network"
 
     def _load_network_name(self) -> str:
-        """Lê o network_name persistido (se existir)"""
+        """Lê o network_name persistido do ConfigManager"""
         try:
-            # 1) Tenta carregar do arquivo unificado do Orion
-            dv = self._read_dados_vps_value("Rede interna:")
-            if dv:
-                return dv
-            # 2) Fallback para arquivo dedicado
-            path = self._network_store_path()
-            if os.path.isfile(path):
-                with open(path, 'r', encoding='utf-8') as f:
+            # Usa ConfigManager para obter o network_name
+            global_config = self.config.get_global_config()
+            network_name = global_config.get('network_name')
+            if network_name:
+                return network_name
+                
+            # Fallback: tenta migrar de arquivos antigos se existirem
+            old_path = "/root/dados_vps/dados_network"
+            if os.path.isfile(old_path):
+                with open(old_path, 'r', encoding='utf-8') as f:
                     content = f.read().strip()
-                    # Aceita formatos "network_name: valor" ou apenas "valor"
                     if content.startswith("network_name:"):
-                        return content.split(":", 1)[1].strip()
-                    return content if content else None
-        except Exception:
-            pass
+                        network_name = content.split(":", 1)[1].strip()
+                    else:
+                        network_name = content if content else None
+                    
+                    # Salva no ConfigManager para próximas execuções
+                    if network_name:
+                        self.config.set_global_config('network_name', network_name)
+                        return network_name
+        except Exception as e:
+            self.logger.debug(f"Erro ao carregar network_name: {e}")
         return None
 
     def _save_network_name(self, net: str) -> None:
-        """Persiste o network_name para reutilização nas próximas execuções"""
+        """Persiste o network_name no ConfigManager"""
         try:
-            os.makedirs("/root/dados_vps", exist_ok=True)
-            path = self._network_store_path()
-            with open(path, 'w', encoding='utf-8') as f:
-                f.write(f"network_name: {net}\n")
-            self.logger.info(f"Rede Docker persistida em {path}")
-            # Atualiza também o arquivo unificado do Orion
-            self._upsert_dados_vps({"Rede interna:": net})
+            # Salva no ConfigManager
+            self.config.set_global_config('network_name', net)
+            self.logger.info(f"Rede Docker '{net}' persistida no ConfigManager")
         except Exception as e:
             self.logger.warning(f"Falha ao persistir network_name: {e}")
     
     def _dados_vps_path(self) -> str:
-        """Caminho do arquivo unificado de dados (padrão Orion)"""
+        """Caminho do arquivo unificado de dados - DEPRECATED"""
+        # Método mantido para compatibilidade, mas não é mais usado
         return "/root/dados_vps/dados_vps"
     
     def _read_dados_vps_value(self, label: str) -> str:
-        """Lê um valor do arquivo dados_vps dado um rótulo (ex.: 'Nome do Servidor:' ou 'Rede interna:')"""
+        """Lê um valor do ConfigManager - DEPRECATED"""
+        # Método mantido para compatibilidade, mas usa ConfigManager
         try:
-            path = self._dados_vps_path()
-            if not os.path.isfile(path):
-                return None
-            with open(path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    if line.strip().startswith(label):
-                        # Extrai após 'label'
-                        parts = line.split(':', 1)
-                        if len(parts) == 2:
-                            return parts[1].strip()
+            global_config = self.config.get_global_config()
+            
+            # Mapeia labels antigos para chaves do ConfigManager
+            label_map = {
+                "Nome do Servidor:": "hostname",
+                "Rede interna:": "network_name"
+            }
+            
+            config_key = label_map.get(label)
+            if config_key:
+                return global_config.get(config_key)
         except Exception:
             pass
         return None
     
     def _upsert_dados_vps(self, updates: dict) -> None:
-        """Atualiza/inclui chaves no arquivo dados_vps preservando conteúdo"""
+        """Atualiza valores no ConfigManager - DEPRECATED"""
+        # Método mantido para compatibilidade, mas usa ConfigManager
         try:
-            os.makedirs("/root/dados_vps", exist_ok=True)
-            path = self._dados_vps_path()
-            lines = []
-            if os.path.isfile(path):
-                with open(path, 'r', encoding='utf-8') as f:
-                    lines = f.read().splitlines()
-            # Converte para dicionário por label -> índice
-            idx_map = {}
-            for i, ln in enumerate(lines):
-                stripped = ln.strip()
-                for key in updates.keys():
-                    if stripped.startswith(key):
-                        idx_map[key] = i
-            # Aplica updates
-            for key, value in updates.items():
-                new_line = f"{key} {value}"
-                if key in idx_map:
-                    lines[idx_map[key]] = new_line
-                else:
-                    lines.append(new_line)
-            with open(path, 'w', encoding='utf-8') as f:
-                f.write("\n".join(lines) + ("\n" if lines else ""))
-            self.logger.debug(f"dados_vps atualizado: {', '.join(updates.keys())}")
+            # Mapeia labels antigos para chaves do ConfigManager
+            label_map = {
+                "Nome do Servidor:": "hostname",
+                "Rede interna:": "network_name"
+            }
+            
+            for label, value in updates.items():
+                config_key = label_map.get(label)
+                if config_key:
+                    self.config.set_global_config(config_key, value)
+            
+            self.logger.debug(f"ConfigManager atualizado: {', '.join(updates.keys())}")
         except Exception as e:
-            self.logger.debug(f"Falha ao atualizar dados_vps: {e}")
+            self.logger.debug(f"Falha ao atualizar ConfigManager: {e}")
 
     def _hostname_store_path(self) -> str:
-        """Caminho do arquivo de persistência do hostname"""
+        """Caminho do arquivo de persistência do hostname - DEPRECATED"""
+        # Método mantido para compatibilidade, mas não é mais usado
         return "/root/dados_vps/dados_hostname"
 
     def _load_hostname(self) -> str:
-        """Lê o hostname persistido (se existir)"""
+        """Lê o hostname persistido do ConfigManager"""
         try:
-            # 1) Tenta carregar do arquivo unificado do Orion
-            dv = self._read_dados_vps_value("Nome do Servidor:")
-            if dv:
-                return dv
-            # 2) Fallback para arquivo dedicado
-            path = self._hostname_store_path()
-            if os.path.isfile(path):
-                with open(path, 'r', encoding='utf-8') as f:
+            # Usa ConfigManager para obter o hostname
+            hostname = self.config.get_hostname()
+            if hostname:
+                return hostname
+                
+            # Fallback: tenta migrar de arquivos antigos se existirem
+            old_path = "/root/dados_vps/dados_hostname"
+            if os.path.isfile(old_path):
+                with open(old_path, 'r', encoding='utf-8') as f:
                     content = f.read().strip()
                     if content.startswith("hostname:"):
-                        return content.split(":", 1)[1].strip()
-                    return content if content else None
-        except Exception:
-            pass
+                        hostname = content.split(":", 1)[1].strip()
+                    else:
+                        hostname = content if content else None
+                    
+                    # Salva no ConfigManager para próximas execuções
+                    if hostname:
+                        self.config.set_global_config('hostname', hostname)
+                        return hostname
+        except Exception as e:
+            self.logger.debug(f"Erro ao carregar hostname: {e}")
         return None
 
     def _save_hostname(self, hostname: str) -> None:
-        """Persiste o hostname para reutilização nas próximas execuções"""
+        """Persiste o hostname no ConfigManager"""
         try:
-            os.makedirs("/root/dados_vps", exist_ok=True)
-            path = self._hostname_store_path()
-            with open(path, 'w', encoding='utf-8') as f:
-                f.write(f"hostname: {hostname}\n")
-            self.logger.info(f"Hostname persistido em {path}")
-            # Atualiza também o arquivo unificado do Orion
-            self._upsert_dados_vps({"Nome do Servidor:": hostname})
+            # Salva no ConfigManager
+            self.config.set_global_config('hostname', hostname)
+            self.logger.info(f"Hostname '{hostname}' persistido no ConfigManager")
         except Exception as e:
             self.logger.warning(f"Falha ao persistir hostname: {e}")
     
@@ -531,7 +532,8 @@ class ModuleCoordinator:
                 return smtp_setup.run()
             
             elif module_name == 'docker':
-                docker_setup = DockerSetup()
+                # Docker precisa do Swarm para as stacks funcionarem
+                docker_setup = DockerSetup(enable_swarm=True)
                 return docker_setup.run()
             
             elif module_name == 'traefik':
@@ -814,9 +816,24 @@ class ModuleCoordinator:
                 return smtp_config and smtp_config.get('configured', False)
             
             if module == 'docker':
-                # Verifica se Docker está rodando
-                result = subprocess.run("docker info", shell=True, capture_output=True, timeout=5)
-                return result.returncode == 0
+                # Verifica se Docker está rodando E Swarm está ativo
+                try:
+                    # Primeiro verifica se Docker está instalado
+                    docker_result = subprocess.run("docker info", shell=True, capture_output=True, timeout=5)
+                    if docker_result.returncode != 0:
+                        return False
+                    
+                    # Depois verifica se Swarm está ativo (necessário para as stacks)
+                    swarm_result = subprocess.run(
+                        "docker info --format '{{.Swarm.LocalNodeState}}'", 
+                        shell=True, capture_output=True, text=True, timeout=5
+                    )
+                    swarm_state = swarm_result.stdout.strip()
+                    
+                    # Só considera instalado se Docker E Swarm estão ativos
+                    return swarm_result.returncode == 0 and swarm_state == "active"
+                except:
+                    return False
             
             if module == 'traefik':
                 # Verifica se Traefik está rodando como stack
@@ -871,6 +888,7 @@ class ModuleCoordinator:
             self.logger.info("Configurações básicas já completas, pulando setup básico")
             return True
             
+        self.logger.info("Iniciando Config (E-mail, Hostname, Cloudflare, Rede, Timezone)")
         basic_setup = BasicSetup(config_manager=self.config)
         return basic_setup.run()
     

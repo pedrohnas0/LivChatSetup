@@ -427,8 +427,8 @@ class BasicSetup(BaseSetup):
                 print(f"✅ Sem subdomínio padrão (domínios diretos)")
                 print(f"   Exemplo de domínios: ptn.{zone_name}")
             
-            # Salva configuração
-            self.config.set_cloudflare_config(api_key, zone_id, zone_name)
+            # Salva configuração com email (necessário para Global API Key)
+            self.config.set_cloudflare_config(api_key, zone_id, zone_name, email)
             self.config.set_cloudflare_auto_dns(True)
             
             print("✅ Cloudflare configurado com sucesso!")
