@@ -88,20 +88,8 @@ class DirectusSetup(BaseSetup):
             if pgvector_creds and pgvector_creds.get("password"):
                 return pgvector_creds["password"]
             
-            # Se não encontrou, tenta o fallback do arquivo legado (temporário)
-            # TODO: Remover após garantir que PgVector sempre salva no ConfigManager
-            try:
-                with open("/root/dados_vps/dados_pgvector", 'r') as f:
-                    for line in f:
-                        if line.startswith("Senha:"):
-                            password = line.split(":", 1)[1].strip()
-                            self.logger.warning("Usando senha do arquivo legado. PgVector deve ser reinstalado para usar ConfigManager.")
-                            return password
-            except FileNotFoundError:
-                pass
-            
-            # Se não encontrou em nenhum lugar, erro fatal
-            raise ValueError("PgVector credentials not found in ConfigManager or legacy file")
+            # Se não encontrou, erro fatal
+            raise ValueError("PgVector credentials not found in ConfigManager. Please reinstall PgVector.")
             
         except Exception as e:
             self.logger.error(f"Erro ao obter senha do PgVector: {e}")
