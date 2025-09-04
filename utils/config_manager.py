@@ -42,8 +42,7 @@ class ConfigManager:
                 "enabled": False
             },
             "credentials": {},
-            "applications": {},
-            "dns_records": []
+            "applications": {}
         }
         
         # Mescla com configuração existente
@@ -62,101 +61,12 @@ class ConfigManager:
                 with open(self.config_path, 'r', encoding='utf-8') as f:
                     return json.load(f)
             else:
-                # Tenta migrar dos arquivos antigos
-                return self._migrate_from_old_files()
+                return {}
         except Exception as e:
             self.logger.warning(f"Erro ao carregar config: {e}")
             return {}
     
-    def _migrate_from_old_files(self) -> Dict[str, Any]:
-        """Migra configurações dos arquivos antigos para o novo formato JSON"""
-        migrated_config = {}
-        old_files_dir = "/root/dados_vps"
-        
-        if not os.path.exists(old_files_dir):
-            return {}
-        
-        # Mapeamento de arquivos antigos para nova estrutura
-        file_mappings = {
-            "dados_vps": "global",
-            "dados_hostname": "global.hostname", 
-            "dados_network": "global.network_name",
-            "dados_cloudflare": "cloudflare"
-        }
-        
-        for filename, config_path in file_mappings.items():
-            file_path = os.path.join(old_files_dir, filename)
-            if os.path.exists(file_path):
-                try:
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        content = f.read().strip()
-                    
-                    # Parse do conteúdo dependendo do arquivo
-                    if filename == "dados_cloudflare":
-                        self._parse_cloudflare_data(content, migrated_config)
-                    elif filename == "dados_hostname":
-                        self._set_nested_value(migrated_config, "global.hostname", content.replace("hostname:", "").strip())
-                    elif filename == "dados_network":
-                        self._set_nested_value(migrated_config, "global.network_name", content.replace("network_name:", "").strip())
-                    elif filename == "dados_vps":
-                        self._parse_vps_data(content, migrated_config)
-                        
-                except Exception as e:
-                    self.logger.warning(f"Erro ao migrar {filename}: {e}")
-        
-        # Salva a configuração migrada
-        if migrated_config:
-            self.logger.info("Configurações migradas dos arquivos antigos")
-            
-        return migrated_config
     
-    def _parse_cloudflare_data(self, content: str, config: Dict[str, Any]):
-        """Parse dos dados do Cloudflare"""
-        if "cloudflare" not in config:
-            config["cloudflare"] = {}
-        
-        for line in content.split('\n'):
-            line = line.strip()
-            if ':' in line:
-                key, value = line.split(':', 1)
-                key = key.strip().lower()
-                value = value.strip()
-                
-                if key == "api token":
-                    config["cloudflare"]["api_token"] = value
-                elif key == "zone id":
-                    config["cloudflare"]["zone_id"] = value
-                elif key == "zone name":
-                    config["cloudflare"]["zone_name"] = value
-    
-    def _parse_vps_data(self, content: str, config: Dict[str, Any]):
-        """Parse dos dados VPS gerais"""
-        if "global" not in config:
-            config["global"] = {}
-            
-        for line in content.split('\n'):
-            line = line.strip()
-            if ':' in line:
-                key, value = line.split(':', 1)
-                key = key.strip().lower()
-                value = value.strip()
-                
-                if key == "nome do servidor":
-                    config["global"]["hostname"] = value
-                elif key == "rede interna":
-                    config["global"]["network_name"] = value
-    
-    def _set_nested_value(self, config: Dict[str, Any], path: str, value: Any):
-        """Define valor em path aninhado (ex: 'global.hostname')"""
-        keys = path.split('.')
-        current = config
-        
-        for key in keys[:-1]:
-            if key not in current:
-                current[key] = {}
-            current = current[key]
-        
-        current[keys[-1]] = value
     
     def save_config(self):
         """Salva configuração no arquivo JSON"""
@@ -262,15 +172,23 @@ class ConfigManager:
     
     def save_app_credentials(self, app_name: str, credentials: Dict[str, Any]):
         """Salva credenciais de uma aplicação"""
+        self.logger.debug(f"Salvando credenciais para {app_name}: {list(credentials.keys())}")
         self.config_data["credentials"][app_name] = {
             **credentials,
             "created_at": datetime.now().isoformat()
         }
         self.save_config()
+        self.logger.debug(f"Credenciais de {app_name} salvas com sucesso")
     
     def get_app_credentials(self, app_name: str) -> Dict[str, Any]:
         """Obtém credenciais de uma aplicação"""
-        return self.config_data["credentials"].get(app_name, {})
+        creds = self.config_data["credentials"].get(app_name, {})
+        if creds:
+            self.logger.debug(f"Credenciais encontradas para {app_name}: {list(creds.keys())}")
+        else:
+            self.logger.debug(f"Nenhuma credencial encontrada para {app_name}")
+            self.logger.debug(f"Apps com credenciais: {list(self.config_data['credentials'].keys())}")
+        return creds
     
     def save_app_config(self, app_name: str, config: Dict[str, Any]):
         """Salva configuração de uma aplicação"""
@@ -290,17 +208,6 @@ class ConfigManager:
     def is_app_installed(self, app_name: str) -> bool:
         """Verifica se aplicação está instalada"""
         return app_name in self.config_data["applications"]
-    
-    # Métodos DNS
-    def add_dns_record(self, record: Dict[str, str]):
-        """Adiciona registro DNS"""
-        record["created_at"] = datetime.now().isoformat()
-        self.config_data["dns_records"].append(record)
-        self.save_config()
-    
-    def get_dns_records(self) -> List[Dict[str, str]]:
-        """Obtém todos os registros DNS"""
-        return self.config_data["dns_records"]
     
     # Métodos Utilitários
     def suggest_domain(self, app_name: str) -> str:
@@ -356,6 +263,5 @@ class ConfigManager:
             "network_name": self.get_network_name(),
             "hostname": self.get_hostname(),
             "user_email": self.get_user_email(),
-            "dns_records_count": len(self.config_data["dns_records"]),
             "last_updated": self.config_data["global"].get("last_updated", "N/A")
         }

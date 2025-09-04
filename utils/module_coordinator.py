@@ -589,7 +589,7 @@ class ModuleCoordinator:
                 if not self.ensure_network_name():
                     self.logger.warning("Nome da rede não definido. Pulando instalação do PgVector.")
                     return True
-                pgvector_setup = PgVectorSetup(network_name=self.args.network_name)
+                pgvector_setup = PgVectorSetup(network_name=self.args.network_name, config_manager=self.config)
                 return pgvector_setup.run()
             
             elif module_name == 'minio':
@@ -1162,7 +1162,7 @@ class ModuleCoordinator:
         if not self.ensure_network_name():
             self.logger.warning("Nome da rede não definido. Pulando instalação do PgVector.")
             return True
-        pgvector_setup = PgVectorSetup(network_name=self.args.network_name)
+        pgvector_setup = PgVectorSetup(network_name=self.args.network_name, config_manager=self.config)
         return pgvector_setup.run()
     
     def run_minio_setup(self) -> bool:

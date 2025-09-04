@@ -248,35 +248,6 @@ class PgVectorSetup(BaseSetup):
                 'configured_at': datetime.now().isoformat()
             })
             self.logger.info("Credenciais salvas no ConfigManager")
-            
-            # Mantém arquivo legado para compatibilidade temporária
-            # TODO: Remover após migração completa de todos os módulos
-            credentials_legacy = f"""[ POSTGRESQL + PGVECTOR ]
-
-Host: pgvector
-Port: 5432
-Database: vectordb
-Usuario: postgres
-Senha: {self.pgvector_password}
-
-String de conexão: postgresql://postgres:{self.pgvector_password}@pgvector:5432/vectordb
-
-Extensões disponíveis:
-- vector (para embeddings e busca semântica)
-- Suporte a índices HNSW e IVFFlat
-
-Exemplo de uso:
-CREATE EXTENSION IF NOT EXISTS vector;
-CREATE TABLE embeddings (id bigserial PRIMARY KEY, embedding vector(1536));
-"""
-            
-            # Cria diretório se não existir
-            os.makedirs("/root/dados_vps", exist_ok=True)
-            
-            with open("/root/dados_vps/dados_pgvector", 'w') as f:
-                f.write(credentials_legacy)
-            
-            self.logger.info("Arquivo legado mantido em /root/dados_vps/dados_pgvector para compatibilidade")
             return True
             
         except Exception as e:
@@ -294,6 +265,14 @@ CREATE TABLE embeddings (id bigserial PRIMARY KEY, embedding vector(1536));
             if existing_creds and existing_creds.get('password'):
                 self.logger.info("PgVector já está rodando e configurado, pulando instalação")
                 self.pgvector_password = existing_creds['password']
+                # IMPORTANTE: Garantir que as credenciais estão salvas (pode ter sido limpo)
+                self.save_credentials()
+                return True
+            else:
+                # PgVector está rodando mas sem credenciais salvas - gerar nova senha
+                self.logger.warning("PgVector está rodando mas sem credenciais salvas - gerando nova senha")
+                self.pgvector_password = self.generate_password()
+                self.save_credentials()
                 return True
         
         # Verifica se Docker Swarm está ativo
@@ -328,6 +307,6 @@ CREATE TABLE embeddings (id bigserial PRIMARY KEY, embedding vector(1536));
         
         self.logger.info("Instalação do PgVector concluída com sucesso")
         self.logger.info(f"Senha gerada: {self.pgvector_password}")
-        self.logger.info("Credenciais salvas no ConfigManager e arquivo legado para compatibilidade")
+        self.logger.info("Credenciais salvas no ConfigManager")
         
         return True

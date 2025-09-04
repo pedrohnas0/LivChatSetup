@@ -72,6 +72,20 @@ Centralized JSON configuration at `/root/livchat-config.json`:
 
 ## Critical Patterns
 
+### DNS Records Configuration
+**IMPORTANTE: Apenas Portainer usa registro A, todos outros usam CNAME:**
+```python
+# ✅ CORRECT - Portainer (único com registro A)
+cf.ensure_a_record(domain, ip=None, proxied=False, comment="Portainer")
+
+# ✅ CORRECT - Todos os outros serviços (CNAME apontando para Portainer)
+cf.create_app_dns_record("app_name", domain)  # Usa CNAME por padrão
+cf.setup_dns_for_service("service", domains)  # Usa CNAME por padrão
+
+# ❌ WRONG - Nunca use proxy do Cloudflare
+cf.ensure_a_record(domain, ip, proxied=True)  # ERRADO!
+```
+
 ### Domain Suggestions
 **Always use Cloudflare zone_name, never hostname:**
 ```python
@@ -476,26 +490,26 @@ Cada módulo deve implementar TODOS os seguintes padrões:
 - Métodos deprecated mantidos para compatibilidade
 - Zero escrita em `/root/dados_vps/`
 
-#### ✅ `utils/cloudflare_api.py` - **REFATORAÇÃO COMPLETA (v4.0 - Global API Key Only)**
-**Status: CONCLUÍDO** - Módulo usa APENAS Global API Key como no design original
+#### ✅ `utils/cloudflare_api.py` - **REFATORAÇÃO COMPLETA (v5.0 - DNS Patterns Fixed)**
+**Status: CONCLUÍDO** - Módulo corrigido com padrões DNS corretos
 
 **Funcionalidades Implementadas:**
-- ✅ Suporte **EXCLUSIVO** para **Global API Key + Email** (design original)
+- ✅ Suporte **EXCLUSIVO** para **Global API Key + Email**
 - ✅ Autenticação via headers `X-Auth-Email` e `X-Auth-Key`
-- ✅ Integração total com ConfigManager
-- ✅ Método único: `setup_credentials()` com email obrigatório
-- ✅ Teste de conexão validando credenciais Global API Key
+- ✅ **CNAME por padrão** para todos exceto Portainer
+- ✅ **Proxy DESABILITADO** por padrão (DNS Only)
+- ✅ Auto-detecção do domínio Portainer como target
+- ✅ Teste de conexão validando credenciais
 - ✅ Gestão completa de DNS (A, CNAME, atualizações)
 - ✅ Auto-detecção de IP público
-- ✅ Sugestão inteligente de domínios via ConfigManager
-- ✅ Factory function `get_cloudflare_api()` simplificada
+- ✅ Sugestão inteligente de domínios
 
-**Mudanças Principais:**
-1. **Removido** todas as referências a `/root/dados_vps/`
-2. **Removido** suporte a API Tokens - APENAS Global API Key
-3. **Email obrigatório** salvo no ConfigManager junto com API Key
-4. **Portainer domain** agora vem do ConfigManager
-5. **Autenticação única** como no repositório original
+**Correções DNS Críticas (v5.0):**
+1. `create_app_dns_record()` - CNAME como padrão
+2. `ensure_a_record()` - Proxy FALSE por padrão
+3. `setup_dns_for_service()` - CNAME como padrão
+4. Auto-detecção do Portainer como target CNAME
+5. Apenas Portainer usa registro A direto
 
 ## 🎯 Complete Refactoring Requirements
 

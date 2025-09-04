@@ -459,8 +459,11 @@ class CloudflareAPI:
             self.logger.error(f"❌ Erro ao atualizar registro: {e}")
             return False
     
-    def ensure_a_record(self, name: str, ip: str = None, proxied: bool = True, comment: str = None) -> bool:
-        """Garante que um registro A exista e aponte para o IP correto"""
+    def ensure_a_record(self, name: str, ip: str = None, proxied: bool = False, comment: str = None) -> bool:
+        """Garante que um registro A exista e aponte para o IP correto
+        
+        Por padrão NÃO usa proxy (DNS Only) para compatibilidade com Traefik
+        """
         if not self.zone_id:
             if not self.get_zone_id():
                 self.logger.error("❌ Zone ID não encontrado")
@@ -601,8 +604,12 @@ class CloudflareAPI:
         return self.config.suggest_domain(app_name)
     
     def create_app_dns_record(self, app_name: str, domain: str = None, 
-                            record_type: str = "A", target_domain: str = None) -> bool:
-        """Cria registro DNS para uma aplicação específica"""
+                            record_type: str = "CNAME", target_domain: str = None) -> bool:
+        """Cria registro DNS para uma aplicação específica
+        
+        Por padrão cria CNAME apontando para o Portainer.
+        Apenas o Portainer deve usar registro A.
+        """
         if not self.is_configured():
             self.logger.error("❌ Cloudflare não configurado")
             return False
@@ -614,6 +621,16 @@ class CloudflareAPI:
         if not domain:
             self.logger.error("❌ Não foi possível determinar domínio para a aplicação")
             return False
+        
+        # Se é CNAME e não tem target, busca o domínio do Portainer
+        if record_type == "CNAME" and not target_domain:
+            portainer_config = self.config.get_app_config('portainer')
+            if portainer_config and portainer_config.get('domain'):
+                target_domain = portainer_config['domain']
+                self.logger.debug(f"Target domain obtido do Portainer: {target_domain}")
+            else:
+                self.logger.error("❌ Portainer não configurado. Instale o Portainer primeiro.")
+                return False
         
         success = False
         
@@ -632,13 +649,6 @@ class CloudflareAPI:
             )
             
             if success:
-                # Salva no ConfigManager
-                self.config.add_dns_record({
-                    "app_name": app_name,
-                    "domain": domain,
-                    "ip": ip_address,
-                    "type": "A"
-                })
                 self.logger.info(f"✅ DNS configurado: {domain} → {ip_address}")
                 
         elif record_type == "CNAME":
@@ -649,13 +659,6 @@ class CloudflareAPI:
             success = self.ensure_cname_record(domain, target_domain)
             
             if success:
-                # Salva no ConfigManager
-                self.config.add_dns_record({
-                    "app_name": app_name,
-                    "domain": domain,
-                    "target": target_domain,
-                    "type": "CNAME"
-                })
                 self.logger.info(f"✅ DNS configurado: {domain} → {target_domain}")
         
         else:

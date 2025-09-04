@@ -94,10 +94,25 @@ class ChatwootSetup(BaseSetup):
     def _get_pgvector_password(self) -> str:
         """Obtém senha do PgVector via ConfigManager"""
         try:
+            # Debug logging
+            self.logger.debug("Tentando obter credenciais do PgVector...")
+            
             # Obtém do ConfigManager
             pgvector_creds = self.config.get_app_credentials("pgvector")
-            if pgvector_creds and pgvector_creds.get("password"):
-                return pgvector_creds["password"]
+            
+            # Debug: mostrar o que foi encontrado
+            if pgvector_creds:
+                self.logger.debug(f"Credenciais PgVector encontradas: {list(pgvector_creds.keys())}")
+                if pgvector_creds.get("password"):
+                    self.logger.debug("Senha do PgVector obtida com sucesso")
+                    return pgvector_creds["password"]
+                else:
+                    self.logger.error("Credenciais encontradas mas sem campo 'password'")
+            else:
+                self.logger.error("Nenhuma credencial PgVector encontrada no ConfigManager")
+                # Debug: mostrar todas as credenciais disponíveis
+                all_creds = self.config.config_data.get("credentials", {})
+                self.logger.debug(f"Credenciais disponíveis: {list(all_creds.keys())}")
             
             # Se não encontrou, erro fatal
             raise ValueError("PgVector credentials not found in ConfigManager. Please reinstall PgVector.")
@@ -325,6 +340,11 @@ class ChatwootSetup(BaseSetup):
         """Executa instalação do Chatwoot usando métodos genéricos do PortainerAPI"""
         try:
             self.logger.info("Iniciando instalação do Chatwoot")
+            
+            # Garante que PgVector está instalado ANTES de coletar dados
+            if not self.ensure_pgvector():
+                self.logger.error("Falha ao garantir PgVector. Abortando instalação do Chatwoot.")
+                return False
             
             # Loop para coleta e confirmação de dados
             variables = None
